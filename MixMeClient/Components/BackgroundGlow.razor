@@ -1,0 +1,41 @@
+﻿<div class="bg-layer">
+    <div class="blob-1"></div>
+    <div class="blob-2"></div>
+</div>
+
+<style>
+    .bg-layer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #121212 !important;
+        z-index: -1;
+        overflow: hidden;
+    }
+
+    .blob-1 {
+        position: absolute;
+        width: 400px;
+        height: 600px;
+        top: -10%;
+        left: -5%;
+        border-radius: 50%;
+        background: #E91E63;
+        filter: blur(120px);
+        opacity: 0.6;
+    }
+
+    .blob-2 {
+        position: absolute;
+        width: 500px;
+        height: 700px;
+        bottom: -10%;
+        right: -5%;
+        border-radius: 50%;
+        background: #E91E63;
+        filter: blur(120px);
+        opacity: 0.5;
+    }
+</style>

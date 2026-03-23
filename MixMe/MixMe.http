@@ -1,0 +1,6 @@
+@MixMe_HostAddress = http://localhost:5256
+
+GET {{MixMe_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

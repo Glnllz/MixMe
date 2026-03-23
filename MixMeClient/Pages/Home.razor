@@ -1,0 +1,242 @@
+﻿@page "/"
+@inject NavigationManager Nav
+
+<BackgroundGlow />
+
+<div class="main-container">
+    @if (currentStep == 1)
+    {
+        <!-- ЭКРАН 1 -->
+        <div class="screen-1-layout">
+            <!-- Логотип теперь СВЕРХУ по центру -->
+            <div class="top-center-logo-area">
+                <img src="images/logo.png" class="hero-logo" />
+            </div>
+
+            <!-- Текст и кнопка остаются в НИЖНЕМ ЛЕВОМ углу -->
+            <div class="bottom-left-info">
+                <h1 class="main-title">MixMe</h1>
+                <p class="main-subtitle">Профессиональное сведение и мастеринг в одном приложении.</p>
+
+                <button class="premium-button" @onclick="() => currentStep = 2">
+                    Начать работу
+                    <span class="ms-2">→</span>
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- ЭКРАН 2 (Оставляем как было, тут всё ок) -->
+        <div class="screen-2-layout">
+            <div class="top-logo-area">
+                <img src="images/logo.png" class="small-logo" />
+            </div>
+
+            <div class="glass-login-card">
+                <h2 class="card-header">Вход</h2>
+
+                <div class="role-grid">
+                    <div class="role-card-item @(role == 1 ? "active" : "")" @onclick="() => role = 1">
+                        <img src="images/icon_customer.png" class="role-img" />
+                        <div class="role-content">
+                            <span class="role-name">Я ищу профессионала</span>
+                            <span class="role-hint">Мне нужно свести трек</span>
+                        </div>
+                    </div>
+
+                    <div class="role-card-item @(role == 2 ? "active" : "")" @onclick="() => role = 2">
+                        <img src="images/icon_engineer.png" class="role-img" />
+                        <div class="role-content">
+                            <span class="role-name">Я создаю шедевры</span>
+                            <span class="role-hint">Я mix/master ingeneer</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="action-btn pink" @onclick='() => Nav.NavigateTo("/login")'>Войти</button>
+                    <button class="action-btn outline" @onclick="GoToRegister">Зарегистрироваться</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .main-container {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+        z-index: 10;
+        color: white;
+    }
+
+    /* --- ЭКРАН 1 --- */
+    .screen-1-layout {
+        width: 100%;
+        height: 100%;
+        position: relative;
+    }
+
+    /* ЛОГОТИП СВЕРХУ ПО ЦЕНТРУ */
+    .top-center-logo-area {
+        position: absolute;
+        top: 10%; /* Отступ сверху */
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+    }
+
+    .hero-logo {
+        height: 150px; /* Немного уменьшил, чтобы не давило */
+        filter: drop-shadow(0 0 30px rgba(233, 30, 99, 0.4));
+    }
+
+    .bottom-left-info {
+        position: absolute;
+        bottom: 80px;
+        left: 80px;
+        max-width: 550px;
+    }
+
+    .main-title {
+        font-size: 6.5rem !important;
+        font-weight: 900 !important;
+        color: #E91E63;
+        margin: 0;
+        letter-spacing: -5px;
+    }
+
+    .main-subtitle {
+        font-size: 1.8rem;
+        font-weight: 300;
+        margin-bottom: 30px;
+        line-height: 1.2;
+    }
+
+    .premium-button {
+        background: rgba(233, 30, 99, 0.1);
+        border: 1px solid #E91E63;
+        color: white;
+        padding: 14px 40px;
+        border-radius: 40px;
+        font-size: 1.1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+        .premium-button:hover {
+            background: #E91E63;
+            box-shadow: 0 0 25px rgba(233, 30, 99, 0.5);
+        }
+
+    /* --- ЭКРАН 2 --- */
+    .screen-2-layout {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }
+
+    .top-logo-area {
+        margin-bottom: 40px;
+    }
+
+    .small-logo {
+        height: 70px;
+        filter: drop-shadow(0 0 15px rgba(233, 30, 99, 0.3));
+    }
+
+    .glass-login-card {
+        background: rgba(30, 30, 30, 0.6);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 45px;
+        padding: 50px 60px;
+        width: 500px;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        text-align: center;
+    }
+
+    .card-header {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 35px;
+        color: white;
+    }
+
+    .role-card-item {
+        display: flex;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 25px;
+        padding: 18px 25px;
+        margin-bottom: 15px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .role-card-item.active {
+            border-color: #E91E63;
+            background: rgba(233, 30, 99, 0.15);
+        }
+
+    .role-img {
+        height: 35px;
+        margin-right: 20px;
+    }
+
+    .role-content {
+        text-align: left;
+    }
+
+    .role-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: white;
+        display: block;
+    }
+
+    .role-hint {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.5);
+    }
+
+    .action-btn {
+        width: 100%;
+        padding: 16px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 1rem;
+        border: none;
+        cursor: pointer;
+        margin-bottom: 15px;
+    }
+
+        .action-btn.pink {
+            background: #E91E63;
+            color: white;
+        }
+
+        .action-btn.outline {
+            background: #FCE4EC;
+            color: #E91E63;
+        }
+</style>
+
+@code {
+    private int currentStep = 1;
+    private int role = 0;
+
+    private void GoToRegister()
+    {
+        if (role == 0) return;
+        Nav.NavigateTo($"/register/{(role == 1 ? "customer" : "engineer")}");
+    }
+}
