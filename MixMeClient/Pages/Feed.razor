@@ -1,0 +1,239 @@
+﻿@page "/feed"
+
+<div class="feed-layout">
+    @* Приветственный блок / Hero *@
+    <section class="hero-section fade-in">
+        <div class="hero-text">
+            <h2>Добро пожаловать в MixMe</h2>
+            <p>У вас есть 3 активных проекта и 5 новых предложений.</p>
+        </div>
+        <button class="main-btn">Опубликовать заказ</button>
+    </section>
+
+    @* Секция фильтров / Категорий *@
+    <div class="feed-filters">
+        <button class="filter-chip active">Все заказы</button>
+        <button class="filter-chip">Рок</button>
+        <button class="filter-chip">Хип-хоп</button>
+        <button class="filter-chip">Поп</button>
+        <button class="filter-chip">Электроника</button>
+    </div>
+
+    @* Основной поток постов *@
+    <section class="stream">
+        @foreach (var post in mockPosts)
+        {
+            <div class="stream-item fade-in">
+                <div class="item-main">
+                    <div class="author-avatar">@post.Username[0]</div>
+                    <div class="item-info">
+                        <div class="item-meta">
+                            <span class="author-name">@post.Username</span>
+                            <span class="dot">•</span>
+                            <span class="timestamp">@post.TimeAgo</span>
+                        </div>
+                        <h3 class="item-title">@post.Title</h3>
+                        <p class="item-desc">@post.Description</p>
+                    </div>
+                </div>
+
+                <div class="item-side">
+                    <div class="price-tag">@post.Budget ₽</div>
+                    <button class="action-btn-small">Откликнуться</button>
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+<style>
+    .feed-layout {
+        width: 100%;
+        max-width: 900px; /* Узкий поток по центру — залог хорошего дизайна */
+        padding: 0 20px;
+    }
+
+    .hero-section {
+        background: linear-gradient(90deg, #1A1A1A, #121212);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 50px;
+    }
+
+    .hero-text h2 {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .hero-text p {
+        color: rgba(255,255,255,0.5);
+        font-size: 1.1rem;
+    }
+
+    .main-btn {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 16px 32px;
+        border-radius: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .main-btn:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+
+    /* Фильтры */
+    .feed-filters {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 30px;
+        overflow-x: auto;
+        padding-bottom: 10px;
+    }
+
+    .filter-chip {
+        background: var(--glass);
+        border: 1px solid var(--border);
+        color: rgba(255,255,255,0.6);
+        padding: 10px 20px;
+        border-radius: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .filter-chip.active, .filter-chip:hover {
+            background: white;
+            color: black;
+            border-color: white;
+        }
+
+    /* Поток (Stream) */
+    .stream {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .stream-item {
+        background: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: 0.3s;
+    }
+
+        .stream-item:hover {
+            background: rgba(255,255,255,0.07);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+    .item-main {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+    }
+
+    .author-avatar {
+        width: 56px;
+        height: 56px;
+        background: #222;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 1.2rem;
+        color: var(--accent);
+    }
+
+    .item-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+
+    .author-name {
+        font-weight: 700;
+        color: white;
+    }
+
+    .dot {
+        color: rgba(255,255,255,0.2);
+    }
+
+    .timestamp {
+        color: rgba(255,255,255,0.4);
+        font-size: 0.85rem;
+    }
+
+    .item-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .item-desc {
+        color: rgba(255,255,255,0.6);
+        font-size: 0.95rem;
+        line-height: 1.5;
+        max-width: 500px;
+    }
+
+    .item-side {
+        text-align: right;
+    }
+
+    .price-tag {
+        font-size: 1.4rem;
+        font-weight: 800;
+        margin-bottom: 12px;
+    }
+
+    .action-btn-small {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .action-btn-small:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+</style>
+
+@code {
+    private List<PostMock> mockPosts = new()
+    {
+        new PostMock { Username = "FutureSounds", TimeAgo = "15 мин назад", Title = "Нужен мощный мастеринг для Trap альбома", Description = "8 треков. Нужен жирный низ и пробивная середина. Жду профи со своим стилем.", Budget = 15000 },
+        new PostMock { Username = "VintageBoy", TimeAgo = "1 час назад", Title = "Сведение гитарного инди-попа", Description = "Лоу-фай вайб, много реверберации. Нужно собрать все в плотный микс.", Budget = 6000 },
+        new PostMock { Username = "StudioX", TimeAgo = "3 часа назад", Title = "Очистка вокала от шумов", Description = "Запись сделана в плохих условиях, нужно убрать эхо и шум вентилятора.", Budget = 2500 }
+    };
+
+    public class PostMock
+    {
+        public string Username { get; set; } = "";
+        public string TimeAgo { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public int Budget { get; set; }
+    }
+}

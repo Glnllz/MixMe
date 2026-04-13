@@ -1,0 +1,261 @@
+﻿@page "/login"
+@using MixMeShared
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject Services.AuthService Auth
+
+<BackgroundGlow />
+
+<div class="auth-container fade-in">
+    <div class="glass-card auth-card">
+        <img src="images/logo.png" class="auth-logo-small" alt="MixMe" />
+        <h2 class="auth-title">Вход</h2>
+        <p class="auth-subtitle">Рады видеть вас снова в мире звука</p>
+
+        <div class="input-stack">
+            <div class="input-group-custom">
+                <i class="bi bi-envelope"></i>
+                <input type="email" placeholder="Email" @bind="loginModel.Email" @bind:event="oninput" />
+            </div>
+            <div class="input-group-custom">
+                <i class="bi bi-lock"></i>
+                <input type="password" placeholder="Пароль" @bind="loginModel.Password" @bind:event="oninput" />
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <p class="error-text">@errorMessage</p>
+        }
+
+        <button class="btn-pink main-auth-btn" @onclick="HandleLogin" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            else
+            {
+                <span>Войти</span>
+            }
+        </button>
+
+        <div class="auth-footer">
+            <span class="footer-question">Нет аккаунта?</span>
+            <a href="/?step=2" class="link-pink">Зарегистрироваться</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        width: 100vw;
+        padding: 60px 20px;
+        position: relative;
+        z-index: 5;
+        box-sizing: border-box;
+    }
+
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(35px) saturate(150%);
+        -webkit-backdrop-filter: blur(35px) saturate(150%);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 40px;
+        width: 100%;
+        max-width: 440px;
+        padding: 45px;
+        text-align: center;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        transition: transform 0.3s ease;
+    }
+
+        .glass-card:hover {
+            border-color: rgba(233, 30, 99, 0.3);
+        }
+
+    .auth-logo-small {
+        height: 55px;
+        margin-bottom: 25px;
+        filter: drop-shadow(0 0 15px rgba(233, 30, 99, 0.4));
+    }
+
+    .auth-title {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
+        color: white;
+    }
+
+    .auth-subtitle {
+        color: rgba(255, 255, 255, 0.5);
+        margin-bottom: 35px;
+        font-size: 0.95rem;
+        line-height: 1.4;
+    }
+
+    .input-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-bottom: 30px;
+    }
+
+    .input-group-custom {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+        .input-group-custom i {
+            position: absolute;
+            left: 20px;
+            color: #666 !important;
+            font-size: 1.2rem;
+            z-index: 10;
+        }
+
+        .input-group-custom input {
+            width: 100%;
+            background: white !important;
+            border: 2px solid transparent;
+            border-radius: 18px;
+            padding: 16px 16px 16px 52px;
+            color: #111 !important;
+            font-weight: 600;
+            font-size: 0.95rem;
+            outline: none;
+            transition: 0.2s;
+        }
+
+            .input-group-custom input:focus {
+                border-color: #E91E63;
+                box-shadow: 0 0 15px rgba(233, 30, 99, 0.1);
+            }
+
+    .btn-pink.main-auth-btn {
+        width: 100%;
+        background: #E91E63;
+        color: white;
+        border: none;
+        border-radius: 18px;
+        padding: 16px;
+        font-weight: 700;
+        font-size: 1.05rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 10px 20px rgba(233, 30, 99, 0.3);
+    }
+
+        .btn-pink.main-auth-btn:hover {
+            background: #ff2e75;
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px rgba(233, 30, 99, 0.4);
+        }
+
+    .auth-footer {
+        margin-top: 30px;
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .link-pink {
+        color: #E91E63;
+        text-decoration: none;
+        font-weight: 700;
+        margin-left: 6px;
+    }
+
+    .error-text {
+        color: #ff5252;
+        background: rgba(255, 82, 82, 0.1);
+        padding: 12px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+        font-weight: 600;
+        border: 1px solid rgba(255, 82, 82, 0.2);
+        animation: shake 0.4s ease-in-out;
+    }
+
+    @@keyframes shake {
+        0%, 100% {
+            transform: translateX(0);
+        }
+
+        25% {
+            transform: translateX(-5px);
+        }
+
+        75% {
+            transform: translateX(5px);
+        }
+    }
+</style>
+
+@code {
+    private LoginDto loginModel = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    private async Task HandleLogin()
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(loginModel.Email) || !loginModel.Email.Contains("@"))
+        {
+            errorMessage = "Введите корректный Email";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            errorMessage = "Введите пароль";
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/auth/login", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Читаем профиль пользователя из ответа
+                var loggedUser = await response.Content.ReadFromJsonAsync<UserProfile>();
+
+                if (loggedUser != null)
+                {
+                    // Вызываем метод логина в сервисе (сохранение в LocalStorage и состояние)
+                    await Auth.Login(loggedUser);
+
+                    // Перенаправляем в ленту
+                    Nav.NavigateTo("/feed");
+                }
+                else
+                {
+                    errorMessage = "Ошибка при чтении данных пользователя.";
+                }
+            }
+            else
+            {
+                var serverError = await response.Content.ReadAsStringAsync();
+                errorMessage = !string.IsNullOrEmpty(serverError) ? serverError : "Неверный логин или пароль";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Ошибка соединения с сервером";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

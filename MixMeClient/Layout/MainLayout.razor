@@ -1,5 +1,246 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@implements IDisposable
 
-<div class="app-container">
-    @Body
+<div class="app-wrapper">
+    @* Фон с «живыми» пятнами (всегда на фоне) *@
+    <div class="bg-visual">
+        <div class="glow-1"></div>
+        <div class="glow-2"></div>
+    </div>
+
+    @* Показываем навигацию только если мы НЕ на страницах входа/регистрации/лендинге *@
+    @if (ShowNavigation())
+    {
+        <header class="top-nav fade-in-down">
+            <div class="nav-content">
+                <div class="brand" @onclick='() => Nav.NavigateTo("/feed")'>
+                    <img src="images/logo.png" alt="logo" />
+                    <span>MixMe</span>
+                </div>
+
+                <nav class="links">
+                    <NavLink href="/feed" ActiveClass="active">Лента</NavLink>
+                    <NavLink href="/search" ActiveClass="active">Инженеры</NavLink>
+                    <NavLink href="/orders" ActiveClass="active">Мои проекты</NavLink>
+                </nav>
+
+                <div class="user-controls">
+                    <div class="search-trigger"><i class="bi bi-search"></i></div>
+                    <div class="profile-link" @onclick='() => Nav.NavigateTo("/profile")'>
+                        <div class="profile-circle">
+                            <i class="bi bi-person-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+    }
+
+    @* Контентная область с динамическим отступом *@
+    <main class="content-area @(ShowNavigation() ? "with-nav" : "full-screen")">
+        @Body
+    </main>
 </div>
+
+<style>
+    :root {
+        --accent: #E91E63;
+        --bg: #0B0B0B;
+        --glass: rgba(255, 255, 255, 0.04);
+        --border: rgba(255, 255, 255, 0.08);
+    }
+
+    .app-wrapper {
+        min-height: 100vh;
+        background: var(--bg);
+        color: white;
+        font-family: 'Inter', sans-serif;
+        overflow-x: hidden;
+    }
+
+    /* Фоновые эффекты (Spotify style) */
+    .bg-visual {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .glow-1 {
+        position: absolute;
+        top: -10%;
+        right: -10%;
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, rgba(233, 30, 99, 0.15) 0%, transparent 70%);
+        filter: blur(60px);
+    }
+
+    .glow-2 {
+        position: absolute;
+        bottom: -5%;
+        left: -5%;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(233, 30, 99, 0.1) 0%, transparent 70%);
+        filter: blur(60px);
+    }
+
+    /* Top Bar */
+    .top-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 70px;
+        background: rgba(11, 11, 11, 0.7);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+    }
+
+    .nav-content {
+        width: 100%;
+        max-width: 1400px;
+        padding: 0 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+    }
+
+        .brand img {
+            height: 32px;
+        }
+
+        .brand span {
+            font-size: 1.2rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+    .links {
+        display: flex;
+        gap: 40px;
+    }
+
+        .links a {
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: 0.3s;
+        }
+
+            .links a:hover, .links a.active {
+                color: white;
+            }
+
+    .user-controls {
+        display: flex;
+        align-items: center;
+        gap: 25px;
+    }
+
+    .search-trigger {
+        color: rgba(255,255,255,0.5);
+        cursor: pointer;
+        font-size: 1.1rem;
+    }
+
+    .profile-circle {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(45deg, #E91E63, #ff4d8d);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.2rem;
+        transition: 0.3s;
+    }
+
+        .profile-circle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(233, 30, 99, 0.4);
+        }
+
+    /* Контентные классы */
+    .content-area {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+        .content-area.with-nav {
+            padding-top: 100px;
+        }
+
+        .content-area.full-screen {
+            padding-top: 0;
+        }
+
+    /* Анимации */
+    .fade-in-down {
+        animation: fadeInDown 0.5s ease forwards;
+    }
+
+    @@keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += HandleLocationChanged;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        StateHasChanged();
+    }
+
+    private bool ShowNavigation()
+    {
+        // Получаем относительный путь (например, "login" или "?step=2")
+        var relativeUri = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+
+        // Отрезаем всё, что идет после знака вопроса (параметры запроса)
+        // Если знака ? нет, останется просто путь страницы
+        var pathOnly = relativeUri.Split('?')[0];
+
+        // Скрываем навигацию, если:
+        // 1. Мы на главной (путь пустой)
+        // 2. Путь содержит "login"
+        // 3. Путь содержит "register"
+        return !(string.IsNullOrEmpty(pathOnly) || pathOnly.Contains("login") || pathOnly.Contains("register"));
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= HandleLocationChanged;
+    }
+}

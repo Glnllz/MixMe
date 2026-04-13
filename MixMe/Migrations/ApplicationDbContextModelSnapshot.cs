@@ -208,6 +208,9 @@ namespace MixMe.Migrations
                     b.Property<string>("AudioBeforeUrl")
                         .HasColumnType("text");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("EngineerId")
                         .HasColumnType("uuid");
 

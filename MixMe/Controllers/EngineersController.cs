@@ -54,11 +54,3 @@ public class EngineersController : ControllerBase
         return NoContent();
     }
 }
-
-// Вспомогательный класс (DTO) для обновления
-public class EngineerUpdateDto
-{
-    public string? Bio { get; set; }
-    public int ExperienceYears { get; set; }
-    public List<int> GenreIds { get; set; } = new();
-}

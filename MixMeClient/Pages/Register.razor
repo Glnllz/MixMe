@@ -1,0 +1,300 @@
+﻿@page "/register"
+@page "/register/{RoleType}"
+@using MixMeShared
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<BackgroundGlow />
+
+<div class="auth-scroll-wrapper">
+<div class="auth-container fade-in">
+    <div class="glass-card auth-card">
+        <img src="images/logo.png" class="auth-logo-small" alt="MixMe" />
+        <h2 class="auth-title">Регистрация</h2>
+        <p class="auth-subtitle">Создайте профиль @(RoleType == "engineer" ? "инженера" : "заказчика")</p>
+
+        <div class="input-stack">
+            <div class="input-group-custom">
+                <i class="bi bi-person"></i>
+                <input type="text" placeholder="Имя пользователя" @bind="regModel.Username" />
+            </div>
+            
+            <div class="input-group-custom">
+                <i class="bi bi-envelope"></i>
+                <input type="email" placeholder="Email" @bind="regModel.Email" />
+            </div>
+
+            <div class="input-group-custom">
+                <i class="bi bi-lock"></i>
+                <input type="password" placeholder="Пароль" @bind="regModel.Password" />
+            </div>
+
+            <div class="input-group-custom">
+                <i class="bi bi-shield-lock"></i>
+                <input type="password" placeholder="Повторите пароль" @bind="confirmPassword" />
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <p class="error-text">@errorMessage</p>
+        }
+
+        <button class="btn-pink main-auth-btn" @onclick="HandleRegister" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            else
+            {
+                <span>Создать аккаунт</span>
+            }
+        </button>
+
+        <div class="auth-footer">
+            <span class="footer-question">Уже есть аккаунт?</span>
+            <a href="/login" class="link-pink">Войти</a>
+        </div>
+    </div>
+</div>
+</div>
+
+<style>
+    .auth-scroll-wrapper {
+        height: 100vh;
+        width: 100vw;
+        overflow-y: auto; /* Позволяет прокручивать страницу */
+        scroll-behavior: smooth;
+        position: relative;
+        z-index: 5;
+    }
+
+    .auth-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100%; /* Занимает минимум всю высоту, но может растягиваться */
+        width: 100%;
+        padding: 60px 20px; /* Отступы, чтобы карточка не прилипала к краям при скролле */
+        box-sizing: border-box;
+    }
+
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05); /* Чуть прозрачнее */
+        backdrop-filter: blur(35px) saturate(150%);
+        -webkit-backdrop-filter: blur(35px) saturate(150%);
+        border: 1px solid rgba(255, 255, 255, 0.15); /* Тонкая грань "стекла" */
+        border-radius: 40px;
+        width: 100%;
+        max-width: 440px; /* Оптимальная ширина для десктопа */
+        padding: 45px;
+        text-align: center;
+        /* Глубокая тень для эффекта объема */
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        transition: transform 0.3s ease;
+    }
+
+        /* Добавим легкий эффект при наведении, чтобы карточка казалась "живой" */
+        .glass-card:hover {
+            border-color: rgba(233, 30, 99, 0.3);
+        }
+
+    .auth-logo-small {
+        height: 55px;
+        margin-bottom: 25px;
+        filter: drop-shadow(0 0 15px rgba(233, 30, 99, 0.4));
+    }
+
+    .auth-title {
+        font-size: 2rem; /* Чуть компактнее */
+        font-weight: 800;
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
+        color: white;
+    }
+
+    .auth-subtitle {
+        color: rgba(255, 255, 255, 0.5);
+        margin-bottom: 35px;
+        font-size: 0.95rem;
+        line-height: 1.4;
+    }
+
+    .input-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px; /* Компактные отступы между полями */
+        margin-bottom: 30px;
+    }
+
+    .input-group-custom {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+        .input-group-custom i {
+            position: absolute;
+            left: 20px;
+            color: #666 !important;
+            font-size: 1.2rem;
+            z-index: 10;
+        }
+
+        .input-group-custom input {
+            width: 100%;
+            background: white !important;
+            border: 2px solid transparent;
+            border-radius: 18px;
+            padding: 16px 16px 16px 52px;
+            color: #111 !important;
+            font-weight: 600;
+            font-size: 0.95rem;
+            outline: none;
+            transition: 0.2s;
+        }
+
+            /* Эффект фокуса на поле ввода */
+            .input-group-custom input:focus {
+                border-color: #E91E63;
+                box-shadow: 0 0 15px rgba(233, 30, 99, 0.1);
+            }
+
+    .btn-pink.main-auth-btn {
+        width: 100%;
+        background: #E91E63;
+        color: white;
+        border: none;
+        border-radius: 18px;
+        padding: 16px;
+        font-weight: 700;
+        font-size: 1.05rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 10px 20px rgba(233, 30, 99, 0.3);
+    }
+
+        .btn-pink.main-auth-btn:hover {
+            background: #ff2e75;
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px rgba(233, 30, 99, 0.4);
+        }
+
+        .btn-pink.main-auth-btn:active {
+            transform: translateY(0);
+        }
+
+    .auth-footer {
+        margin-top: 30px;
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .link-pink {
+        color: #E91E63;
+        text-decoration: none;
+        font-weight: 700;
+        margin-left: 6px;
+        transition: color 0.2s;
+    }
+
+        .link-pink:hover {
+            color: #ff5c93;
+            text-decoration: underline;
+        }
+
+    .error-text {
+        color: #ff5252;
+        background: rgba(255, 82, 82, 0.1); /* Легкий красный фон */
+        padding: 12px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+        font-weight: 600;
+        border: 1px solid rgba(255, 82, 82, 0.2);
+        animation: shake 0.4s ease-in-out; /* Эффект тряски при появлении */
+    }
+
+    @@keyframes shake {
+        0%, 100%
+
+    {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+
+    }
+</style>
+
+@code {
+    [Parameter] public string RoleType { get; set; } = "customer";
+    private RegisterDto regModel = new();
+    private string confirmPassword = "";
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    private async Task HandleRegister()
+    {
+        errorMessage = null;
+
+        // 1. Валидация Имени пользователя
+        if (string.IsNullOrWhiteSpace(regModel.Username) || regModel.Username.Length < 3)
+        {
+            errorMessage = "Имя пользователя должно быть не короче 3 символов";
+            return;
+        }
+
+        // 2. Валидация Email
+        if (string.IsNullOrWhiteSpace(regModel.Email) || !regModel.Email.Contains("@"))
+        {
+            errorMessage = "Введите корректный адрес электронной почты";
+            return;
+        }
+
+        // 3. Валидация Пароля
+        if (string.IsNullOrWhiteSpace(regModel.Password) || regModel.Password.Length < 6)
+        {
+            errorMessage = "Пароль должен содержать минимум 6 символов";
+            return;
+        }
+
+        // 4. Совпадение паролей
+        if (regModel.Password != confirmPassword)
+        {
+            errorMessage = "Пароли не совпадают";
+            return;
+        }
+
+        isLoading = true;
+        regModel.Role = RoleType;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/auth/register", regModel);
+            if (response.IsSuccessStatusCode)
+            {
+                Nav.NavigateTo("/login");
+            }
+            else
+            {
+                // Сервер может вернуть ошибку, если Email уже занят
+                errorMessage = await response.Content.ReadAsStringAsync();
+            }
+        }
+        catch
+        {
+            errorMessage = "Ошибка соединения с сервером";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

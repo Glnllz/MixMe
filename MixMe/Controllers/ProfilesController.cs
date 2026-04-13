@@ -17,12 +17,22 @@ public class ProfilesController : ControllerBase
     }
 
     // Метод для получения всех профилей (чтобы проверить)
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<UserProfile>>> GetProfiles()
+    [HttpGet("{id}")]
+    public async Task<ActionResult<UserProfile>> GetProfile(Guid id)
     {
-        return await _context.Profiles.ToListAsync();
+        // Загружаем профиль вместе с его Ролью
+        var profile = await _context.Profiles
+            .Include(p => p.Role)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (profile == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(profile);
     }
-  
+
 
     [HttpPost]
     public async Task<ActionResult<UserProfile>> CreateProfile(UserProfile profile)
@@ -51,5 +61,19 @@ public class ProfilesController : ControllerBase
         }
 
         return Ok(profile);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateProfile(Guid id, UserProfile updateDto)
+    {
+        var profile = await _context.Profiles.FindAsync(id);
+        if (profile == null) return NotFound();
+
+        profile.FullName = updateDto.FullName;
+        profile.AvatarUrl = updateDto.AvatarUrl;
+        // Пароль и Email обычно меняются через отдельные защищенные методы
+
+        await _context.SaveChangesAsync();
+        return NoContent();
     }
 }

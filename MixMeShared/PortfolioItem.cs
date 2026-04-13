@@ -11,6 +11,7 @@ namespace MixMeShared
         public int Id { get; set; }
         public Guid EngineerId { get; set; }
         public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public string? AudioBeforeUrl { get; set; } // Ссылка на облако (S3)
         public string? AudioAfterUrl { get; set; }
     }
