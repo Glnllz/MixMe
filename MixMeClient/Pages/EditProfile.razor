@@ -9,74 +9,101 @@
 @* Фоновое свечение *@
 <BackgroundGlow />
 
-<div class="edit-scroll-container">
-    <div class="profile-layout fade-in">
-        <div class="glass-card edit-card">
+<div class="edit-container-full fade-in">
+    <div class="edit-card-modern">
 
-            @* Шапка формы *@
-            <div class="edit-header">
-                <div class="header-icon">
+        @* --- ШАПКА РЕДАКТИРОВАНИЯ --- *@
+        <header class="edit-top-bar">
+            <div class="d-flex align-items-center gap-4">
+                <div class="header-icon-box">
                     <i class="bi bi-person-gear"></i>
                 </div>
                 <div>
-                    <h2 class="text-pink">Настройки профиля</h2>
-                    <p class="subtitle">Персонализируйте вашу страницу в MixMe</p>
+                    <h2>Настройки аккаунта</h2>
+                    <p>Управление персональными данными и профессиональным профилем</p>
                 </div>
             </div>
+            <button class="btn-close-minimal" @onclick='() => Nav.NavigateTo("/profile")' title="Закрыть">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </header>
 
-            @if (user == null)
-            {
-                <div class="text-center p-5">
-                    <span class="spinner-border text-pink"></span>
-                </div>
-            }
-            else
-            {
-                <div class="edit-form">
+        @if (user == null)
+        {
+            <div class="loader-box">
+                <div class="spinner-premium"></div>
+                <p>Загрузка данных...</p>
+            </div>
+        }
+        else
+        {
+            <div class="edit-content-grid">
 
-                    @* --- АВАТАР --- *@
-                    <div class="input-section text-center">
-                        <div class="edit-avatar-wrapper">
-                            @* Добавляем вызов GetFullUrl *@
-                            <img src="@GetFullUrl(user.AvatarUrl)" class="edit-preview-avatar" />
+                @* --- ЛЕВАЯ КОЛОНКА: АВАТАР И БАЗОВЫЕ ДАННЫЕ --- *@
+                <section class="edit-main-fields">
+                    <div class="section-label">Основная информация</div>
 
-                            <label for="avatarUpload" class="btn-change-photo">
-                                <i class="bi bi-camera-fill me-2"></i> Изменить фото
+                    <div class="avatar-edit-section">
+                        <div class="avatar-large-preview">
+                            <img src="@GetFullUrl(user.AvatarUrl)" alt="Avatar" />
+                            <label for="avatarUpload" class="upload-overlay">
+                                <i class="bi bi-camera-fill"></i>
+                                <span>Изменить</span>
+                                <small class="avatar-size-tip">512x512px</small>
                             </label>
                             <InputFile id="avatarUpload" OnChange="UploadAvatar" hidden accept="image/*" />
                         </div>
+                        <div class="avatar-info">
+                            <span class="username-display-large">@@@user.Username</span>
+                        </div>
                     </div>
 
-                    @* Поле: Имя *@
-                    <div class="input-section">
-                        <label><i class="bi bi-person-circle"></i> Полное имя</label>
-                        <input type="text" class="modern-input" @bind="user.FullName" placeholder="Введите ваше имя" />
+                    @if (!string.IsNullOrEmpty(serverErrorMessage))
+                    {
+                        <div class="alert alert-danger py-2 mb-4" style="border-radius: 12px; font-size: 0.85rem; background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.2); color: #ff8585;">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> @serverErrorMessage
+                        </div>
+                    }
+
+                    <div class="form-group-modern">
+                        <label><i class="bi bi-at"></i> Имя пользователя (уникальное)</label>
+                        <input type="text" @bind="user.Username" placeholder="nickname" />
                     </div>
 
+                    <div class="form-group-modern">
+                        <label><i class="bi bi-person-vcard"></i> Отображаемое имя</label>
+                        <input type="text" @bind="user.FullName" placeholder="Имя Фамилия" />
+                    </div>
+
+                    <div class="form-group-modern">
+                        <label><i class="bi bi-envelope-at"></i> Email (защищен)</label>
+                        <input type="text" value="@user.Email" disabled class="disabled-input" />
+                    </div>
+                </section>
+
+                @* --- ПРАВАЯ КОЛОНКА: ДАННЫЕ ИНЖЕНЕРА --- *@
+                <section class="edit-pro-fields">
                     @if (user.RoleId == 2)
                     {
-                        @* Поле: О себе *@
-                        <div class="input-section">
-                            <label><i class="bi bi-chat-quote"></i> О себе (Bio)</label>
-                            <textarea class="modern-input" @bind="engineerDto.Bio" rows="4"
-                                      placeholder="Расскажите о своем стиле, оборудовании и подходе к работе..."></textarea>
+                        <div class="section-label text-pink">Настройки инженера</div>
+
+                        <div class="form-group-modern">
+                            <label><i class="bi bi-body-text"></i> Биография и Оборудование</label>
+                            <textarea @bind="engineerDto.Bio" rows="8"
+                                      placeholder="Опишите ваш творческий путь, DAW, плагины и студийные мониторы..."></textarea>
                         </div>
 
-                        @* Поле: Опыт *@
-                        <div class="input-section">
-                            <label><i class="bi bi-clock-history"></i> Опыт работы (лет)</label>
-                            <div class="number-input-wrapper">
-                                <input type="number" class="modern-input" @bind="engineerDto.ExperienceYears" />
-                            </div>
+                        <div class="form-group-modern">
+                            <label><i class="bi bi-award"></i> Профессиональный стаж (лет)</label>
+                            <input type="number" @bind="engineerDto.ExperienceYears" />
                         </div>
 
-                        @* Поле: Жанры *@
-                        <div class="input-section">
-                            <label><i class="bi bi-music-note-beamed"></i> Ваша специализация (жанры)</label>
-                            <div class="modern-genres">
+                        <div class="form-group-modern">
+                            <label><i class="bi bi-tags"></i> Жанровая специализация</label>
+                            <div class="genre-chips-edit">
                                 @foreach (var genre in allGenres)
                                 {
-                                    <div class="m-genre-chip @(engineerDto.GenreIds.Contains(genre.Id) ? "active" : "")"
+                                    <div class="genre-chip @(engineerDto.GenreIds.Contains(genre.Id) ? "selected" : "")"
                                          @onclick="() => ToggleGenre(genre.Id)">
                                         @genre.Name
                                     </div>
@@ -84,161 +111,83 @@
                             </div>
                         </div>
                     }
+                    else
+                    {
+                        <div class="customer-info-box">
+                            <i class="bi bi-info-circle"></i>
+                            <p>Вы зарегистрированы как Заказчик. Дополнительные настройки доступны только для инженеров.</p>
+                        </div>
+                    }
+                </section>
+            </div>
 
-                    @* Кнопки действий *@
-                    <div class="edit-actions">
-                        <button class="btn-main-pink" @onclick="SaveProfile" disabled="@isSaving">
-                            @if (isSaving)
-                            {
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                            }
-                            <i class="bi bi-check-lg"></i> Сохранить изменения
-                        </button>
-
-                        <button class="btn-ghost" @onclick='() => Nav.NavigateTo("/profile")'>
-                            Отмена
-                        </button>
-                    </div>
-                </div>
-            }
-        </div>
+            @* --- ФУТЕР --- *@
+            <footer class="edit-footer">
+                <button class="btn-cancel" @onclick='() => Nav.NavigateTo("/profile")'>Отмена</button>
+                <button class="btn-save-pro" @onclick="SaveProfile" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-cloud-check-fill me-2"></i>
+                    }
+                    Сохранить изменения
+                </button>
+            </footer>
+        }
     </div>
 </div>
 
 <style>
-    /* КОНТЕЙНЕР СО СКРОЛЛОМ */
-    .edit-scroll-container {
-        height: 100vh;
-        width: 100vw;
-        overflow-y: auto;
-        padding: 40px 20px;
-        position: relative;
-        z-index: 10;
-        scroll-behavior: smooth;
+    :root {
+        --pink: #E91E63;
+        --pink-hover: #ff2e75;
+        --glass-bg: rgba(15, 15, 15, 0.9);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --text-muted: rgba(255, 255, 255, 0.5);
     }
 
-    /* КАРТОЧКА */
-    .edit-card {
-        max-width: 700px;
-        margin: 0 auto;
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(40px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 40px;
-        padding: 50px;
-        box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-    }
-
-    /* АВАТАР В РЕДАКТИРОВАНИИ */
-    .edit-avatar-wrapper {
-        position: relative;
-        display: inline-block;
-        margin-bottom: 30px;
-    }
-
-    .edit-preview-avatar {
-        width: 150px;
-        height: 150px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid #E91E63;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-    }
-
-    .btn-change-photo {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        background: #E91E63;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 50px;
-        cursor: pointer;
-        font-size: 0.8rem;
-        font-weight: 700;
-        border: 2px solid #1a1a1a;
-        transition: 0.3s;
-    }
-
-        .btn-change-photo:hover {
-            transform: scale(1.05);
-            background: #ff2e75;
-        }
-
-    /* Кнопка "Добавить работу" */
-    .btn-add-work {
-        background: rgba(233, 30, 99, 0.1);
-        border: 1px dashed #E91E63;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 15px;
-        transition: 0.3s;
-        cursor: pointer;
-    }
-
-        .btn-add-work:hover {
-            background: #E91E63;
-            border-style: solid;
-        }
-
-    /* Стили модального окна */
-    .modal-backdrop {
+    /* ФИКСИРОВАННЫЙ КОНТЕЙНЕР */
+    .edit-container-full {
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
-        background: rgba(0,0,0,0.8);
-        backdrop-filter: blur(10px);
+        overflow-y: auto;
         display: flex;
-        align-items: center;
         justify-content: center;
-        z-index: 1000;
+        align-items: flex-start;
+        padding: 80px 20px;
+        z-index: 100;
+        background: transparent;
     }
 
-    .modal-content {
-        max-width: 500px;
-        width: 90%;
-        padding: 40px;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 30px;
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .file-label {
+    .edit-card-modern {
+        width: 100%;
+        max-width: 1100px;
+        background: var(--glass-bg);
+        backdrop-filter: blur(50px);
+        border: 1px solid var(--glass-border);
+        border-radius: 40px;
+        box-shadow: 0 50px 100px rgba(0,0,0,0.7);
         display: block;
-        background: rgba(255,255,255,0.05);
-        border: 2px dashed rgba(255,255,255,0.1);
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        cursor: pointer;
-        transition: 0.3s;
+        position: relative;
+        margin-bottom: 50px;
     }
 
-        .file-label:hover {
-            background: rgba(255,255,255,0.08);
-        }
-
-        .file-label.pink {
-            border-color: rgba(233,30,99,0.3);
-        }
-
-    .file-status {
-        font-size: 0.7rem;
-        margin-top: 5px;
-        color: #E91E63;
-    }
-
-    /* ФОРМА */
-    .edit-header {
+    .edit-top-bar {
+        padding: 40px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 20px;
-        margin-bottom: 40px;
+        color: white;
     }
 
-    .header-icon {
+    .header-icon-box {
         width: 60px;
         height: 60px;
         background: rgba(233, 30, 99, 0.1);
@@ -247,112 +196,276 @@
         align-items: center;
         justify-content: center;
         font-size: 1.8rem;
-        color: #E91E63;
+        color: var(--pink);
     }
 
-    .subtitle {
-        color: rgba(255,255,255,0.4);
-        margin: 0;
+    .username-display-large {
+        color: #fff;
+        font-weight: 900;
+        font-size: 2.2rem;
+        letter-spacing: -1px;
+        display: block;
+        margin-bottom: 5px;
+        text-shadow: 0 5px 15px rgba(0,0,0,0.3);
     }
 
-    .input-section {
-        margin-bottom: 25px;
-    }
-
-        .input-section label {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
-            color: rgba(255,255,255,0.6);
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-    .modern-input {
-        width: 100%;
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 15px 20px;
-        color: white;
-        outline: none;
+    .btn-close-minimal {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #fff;
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         transition: 0.3s;
     }
 
-        .modern-input:focus {
-            border-color: #E91E63;
-            box-shadow: 0 0 20px rgba(233, 30, 99, 0.15);
+        .btn-close-minimal:hover {
+            background: var(--pink);
+            transform: rotate(90deg);
+            border-color: var(--pink);
         }
 
-    .modern-genres {
+    .edit-content-grid {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 60px;
+        padding: 50px 40px;
+    }
+
+    .section-label {
+        font-size: 0.75rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--pink);
+        margin-bottom: 30px;
+    }
+
+    /* АВАТАР */
+    .avatar-edit-section {
+        display: flex;
+        align-items: center;
+        gap: 25px;
+        margin-bottom: 40px;
+    }
+
+    .avatar-large-preview {
+        width: 140px;
+        height: 140px;
+        border-radius: 35px;
+        position: relative;
+        overflow: hidden;
+        border: 2px solid var(--pink);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+    }
+
+        .avatar-large-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .upload-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(233, 30, 99, 0.85);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        cursor: pointer;
+        transition: 0.3s;
+        color: white;
+        text-align: center;
+    }
+
+        .upload-overlay span {
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+    .avatar-size-tip {
+        font-size: 10px;
+        opacity: 0.8;
+        margin-top: 5px;
+    }
+
+    .avatar-large-preview:hover .upload-overlay {
+        opacity: 1;
+    }
+
+    /* ФОРМЫ */
+    .form-group-modern {
+        margin-bottom: 30px;
+    }
+
+        .form-group-modern label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255,255,255,0.8);
+            margin-bottom: 12px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+            .form-group-modern label i {
+                color: var(--pink);
+            }
+
+        .form-group-modern input, .form-group-modern textarea {
+            width: 100%;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 18px;
+            padding: 16px 20px;
+            color: #fff;
+            outline: none;
+            transition: 0.3s;
+        }
+
+            .form-group-modern input:focus, .form-group-modern textarea:focus {
+                border-color: var(--pink);
+                background: rgba(255,255,255,0.06);
+                box-shadow: 0 0 20px rgba(233, 30, 99, 0.15);
+            }
+
+    .disabled-input {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    /* ЖАНРЫ */
+    .genre-chips-edit {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
     }
 
-    .m-genre-chip {
+    .genre-chip {
         padding: 10px 20px;
-        border-radius: 30px;
         background: rgba(255,255,255,0.05);
         border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 50px;
+        color: white;
         cursor: pointer;
+        font-size: 0.85rem;
         transition: 0.3s;
-        font-size: 0.9rem;
-        font-weight: 600;
     }
 
-        .m-genre-chip.active {
-            background: #E91E63;
-            border-color: #E91E63;
+        .genre-chip.selected {
+            background: var(--pink);
+            border-color: var(--pink);
+            font-weight: 700;
+            box-shadow: 0 5px 15px rgba(233, 30, 99, 0.3);
         }
 
-    .edit-actions {
+    /* ФУТЕР */
+    .edit-footer {
+        padding: 35px 40px;
+        background: rgba(0,0,0,0.3);
         display: flex;
-        flex-direction: column;
-        gap: 15px;
-        margin-top: 40px;
+        justify-content: flex-end;
+        gap: 25px;
+        border-top: 1px solid rgba(255,255,255,0.05);
+        border-radius: 0 0 40px 40px;
     }
 
-    .btn-main-pink {
-        background: #E91E63;
-        color: white;
+    .btn-save-pro {
+        background: var(--pink);
+        color: #fff;
         border: none;
-        padding: 18px;
-        border-radius: 18px;
+        padding: 16px 45px;
+        border-radius: 20px;
         font-weight: 800;
-        font-size: 1.1rem;
-        cursor: pointer;
+        box-shadow: 0 10px 20px rgba(233, 30, 99, 0.2);
         transition: 0.3s;
     }
 
-        .btn-main-pink:hover {
+        .btn-save-pro:hover {
             transform: translateY(-3px);
             box-shadow: 0 15px 30px rgba(233, 30, 99, 0.4);
+            background: var(--pink-hover);
         }
 
-    .btn-ghost {
+    .btn-cancel {
         background: transparent;
-        color: rgba(255,255,255,0.5);
         border: none;
-        padding: 10px;
-        font-weight: 600;
-        cursor: pointer;
+        color: var(--text-muted);
+        font-weight: 700;
+        transition: 0.3s;
     }
 
-    /* Кастомный скроллбар */
-    .edit-scroll-container::-webkit-scrollbar {
+        .btn-cancel:hover {
+            color: white;
+        }
+
+    .loader-box {
+        padding: 100px;
+        text-align: center;
+        color: white;
+    }
+
+    .spinner-premium {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(233, 30, 99, 0.1);
+        border-top-color: var(--pink);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+
+    .customer-info-box {
+        background: rgba(255,255,255,0.03);
+        padding: 30px;
+        border-radius: 25px;
+        border: 1px solid rgba(255,255,255,0.05);
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        color: var(--text-muted);
+    }
+
+        .customer-info-box i {
+            font-size: 1.5rem;
+            color: var(--pink);
+        }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+    /* КРАСИВЫЙ СКРОЛЛБАР ДЛЯ КОНТЕЙНЕРА */
+    .edit-container-full::-webkit-scrollbar {
         width: 8px;
     }
 
-    .edit-scroll-container::-webkit-scrollbar-thumb {
-        background: rgba(233, 30, 99, 0.3);
+    .edit-container-full::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
         border-radius: 10px;
     }
 
-        .edit-scroll-container::-webkit-scrollbar-thumb:hover {
-            background: #E91E63;
+    .edit-container-full::-webkit-scrollbar-thumb {
+        background: rgba(233, 30, 99, 0.3); /* Полупрозрачный розовый */
+        border-radius: 10px;
+        transition: 0.3s;
+    }
+
+        .edit-container-full::-webkit-scrollbar-thumb:hover {
+            background: var(--pink); /* Яркий розовый при наведении */
         }
+
+    /* Для Firefox */
+    .edit-container-full {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(233, 30, 99, 0.3) rgba(0, 0, 0, 0.2);
+    }
 </style>
 
 @code {
@@ -360,8 +473,8 @@
     private EngineerUpdateDto engineerDto = new();
     private List<Genre> allGenres = new();
     private bool isSaving = false;
+    private string? serverErrorMessage;
 
-    // Адрес вашего бэкенда (проверьте порт в Swagger)
     private string BaseApiUrl = "https://localhost:7237";
 
     protected override async Task OnInitializedAsync()
@@ -370,7 +483,6 @@
 
         try
         {
-            // Используем полный путь для запросов, если HttpClient не настроен на BaseAddress
             user = await Http.GetFromJsonAsync<UserProfile>($"{BaseApiUrl}/api/profiles/{Auth.User.Id}");
             allGenres = await Http.GetFromJsonAsync<List<Genre>>($"{BaseApiUrl}/api/dictionary/genres") ?? new();
 
@@ -385,72 +497,72 @@
                 }
             }
         }
-        catch (Exception ex) { Console.WriteLine($"Ошибка при загрузке: {ex.Message}"); }
+        catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
     }
 
-    // МЕТОД ДЛЯ ОТОБРАЖЕНИЯ ФОТО (используйте его в теге <img src="@GetFullUrl(user.AvatarUrl)" />)
     private string GetFullUrl(string? url)
     {
-        if (string.IsNullOrEmpty(url))
-            return "images/default-avatar.png"; // Путь к заглушке во фронтенде
-
+        if (string.IsNullOrEmpty(url)) return "images/default-avatar.png";
         if (url.StartsWith("http")) return url;
-
-        var separator = url.StartsWith("/") ? "" : "/";
-        return $"{BaseApiUrl}{separator}{url}";
+        return $"{BaseApiUrl}/{(url.TrimStart('/'))}";
     }
 
     private async Task UploadAvatar(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file == null) return;
-
         try
         {
+            var file = e.File;
             using var content = new MultipartFormDataContent();
-            var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 10); // до 10 МБ
+            var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 5);
             var fileContent = new StreamContent(stream);
             content.Add(fileContent, "file", file.Name);
 
             var response = await Http.PostAsync($"{BaseApiUrl}/api/Files/upload", content);
-
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<UploadResult>();
-                if (user != null && result != null)
-                {
-                    // Сохраняем относительный путь (/uploads/...),
-                    // метод GetFullUrl сам добавит домен для отображения
-                    user.AvatarUrl = result.Url;
-                    StateHasChanged();
-                }
+                if (user != null && result != null) { user.AvatarUrl = result.Url; StateHasChanged(); }
             }
         }
-        catch (Exception ex) { Console.WriteLine($"Ошибка загрузки файла: {ex.Message}"); }
+        catch (Exception ex) { Console.WriteLine(ex.Message); }
     }
 
     private void ToggleGenre(int id)
     {
-        if (engineerDto.GenreIds.Contains(id))
-            engineerDto.GenreIds.Remove(id);
-        else
-            engineerDto.GenreIds.Add(id);
+        if (engineerDto.GenreIds.Contains(id)) engineerDto.GenreIds.Remove(id);
+        else engineerDto.GenreIds.Add(id);
     }
 
     private async Task SaveProfile()
     {
         if (user == null) return;
         isSaving = true;
+        serverErrorMessage = null;
+
         try
         {
-            await Http.PutAsJsonAsync($"{BaseApiUrl}/api/profiles/{user.Id}", user);
-            if (user.RoleId == 2)
+            var response = await Http.PutAsJsonAsync($"{BaseApiUrl}/api/profiles/{user.Id}", user);
+
+            if (response.IsSuccessStatusCode)
             {
-                await Http.PutAsJsonAsync($"{BaseApiUrl}/api/engineers/{user.Id}", engineerDto);
+                if (user.RoleId == 2)
+                    await Http.PutAsJsonAsync($"{BaseApiUrl}/api/engineers/{user.Id}", engineerDto);
+
+                Nav.NavigateTo("/profile");
             }
-            Nav.NavigateTo("/profile");
+            else
+            {
+                // Пытаемся прочитать ошибку от API (например: "Username already exists")
+                serverErrorMessage = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrEmpty(serverErrorMessage))
+                    serverErrorMessage = "Ошибка при сохранении. Проверьте данные.";
+            }
         }
-        catch (Exception ex) { Console.WriteLine($"Ошибка сохранения: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            serverErrorMessage = "Сетевая ошибка. Попробуйте позже.";
+        }
         finally { isSaving = false; }
     }
 

@@ -34,6 +34,9 @@ public class AuthController : ControllerBase
         if (await _context.Profiles.AnyAsync(u => u.Email == dto.Email))
             return BadRequest("Email уже занят");
 
+        if (await _context.Profiles.AnyAsync(u => u.Username.ToLower() == dto.Username.ToLower()))
+            return BadRequest("Имя пользователя уже занято");
+
         var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name.ToLower() == dto.Role.ToLower());
 
         var newUser = new UserProfile

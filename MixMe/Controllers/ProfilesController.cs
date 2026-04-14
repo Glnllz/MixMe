@@ -69,9 +69,19 @@ public class ProfilesController : ControllerBase
         var profile = await _context.Profiles.FindAsync(id);
         if (profile == null) return NotFound();
 
+        // Проверка уникальности юзернейма, если он изменился
+        if (profile.Username != updateDto.Username)
+        {
+            bool exists = await _context.Profiles
+                .AnyAsync(p => p.Username.ToLower() == updateDto.Username.ToLower() && p.Id != id);
+
+            if (exists)
+                return BadRequest("Это имя пользователя уже занято другим участником.");
+        }
+
+        profile.Username = updateDto.Username; // Теперь разрешаем изменение
         profile.FullName = updateDto.FullName;
         profile.AvatarUrl = updateDto.AvatarUrl;
-        // Пароль и Email обычно меняются через отдельные защищенные методы
 
         await _context.SaveChangesAsync();
         return NoContent();
