@@ -2,7 +2,7 @@
 @using MixMeShared
 @using System.Net.Http.Headers
 @inject HttpClient Http
-@inject Services.AuthService Auth
+@inject MixMeClient.Services.AuthService Auth
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -39,13 +39,23 @@
         {
             <div class="edit-content-grid">
 
-                @* --- ЛЕВАЯ КОЛОНКА: АВАТАР И БАЗОВЫЕ ДАННЫЕ --- *@
+                @* --- ЛЕВАЯ КОЛОНКА: АВАТАР, БАЗОВЫЕ ДАННЫЕ И БЕЗОПАСНОСТЬ --- *@
                 <section class="edit-main-fields">
                     <div class="section-label">Основная информация</div>
 
                     <div class="avatar-edit-section">
                         <div class="avatar-large-preview">
-                            <img src="@GetFullUrl(user.AvatarUrl)" alt="Avatar" />
+                            @if (string.IsNullOrEmpty(user.AvatarUrl))
+                            {
+                                <div class="avatar-placeholder-edit">
+                                    <i class="bi bi-person-fill"></i>
+                                </div>
+                            }
+                            else
+                            {
+                                <img src="@GetFullUrl(user.AvatarUrl)" alt="Avatar" />
+                            }
+
                             <label for="avatarUpload" class="upload-overlay">
                                 <i class="bi bi-camera-fill"></i>
                                 <span>Изменить</span>
@@ -79,9 +89,22 @@
                         <label><i class="bi bi-envelope-at"></i> Email (защищен)</label>
                         <input type="text" value="@user.Email" disabled class="disabled-input" />
                     </div>
+
+                    @* --- СЕКЦИЯ БЕЗОПАСНОСТИ --- *@
+                    <div class="section-label mt-5">Безопасность</div>
+
+                    <div class="form-group-modern">
+                        <label><i class="bi bi-key"></i> Новый пароль</label>
+                        <input type="password" @bind="newPassword" placeholder="Оставьте пустым, чтобы не менять" />
+                    </div>
+
+                    <div class="form-group-modern">
+                        <label><i class="bi bi-shield-check"></i> Повторите пароль</label>
+                        <input type="password" @bind="confirmPassword" placeholder="Повторите новый пароль" />
+                    </div>
                 </section>
 
-                @* --- ПРАВАЯ КОЛОНКА: ДАННЫЕ ИНЖЕНЕРА --- *@
+                @* --- ПРАВАЯ КОЛОНКА: ДАННЫЕ ИНЖЕНЕРА И УСЛУГИ --- *@
                 <section class="edit-pro-fields">
                     @if (user.RoleId == 2)
                     {
@@ -89,8 +112,8 @@
 
                         <div class="form-group-modern">
                             <label><i class="bi bi-body-text"></i> Биография и Оборудование</label>
-                            <textarea @bind="engineerDto.Bio" rows="8"
-                                      placeholder="Опишите ваш творческий путь, DAW, плагины и студийные мониторы..."></textarea>
+                            <textarea @bind="engineerDto.Bio" rows="6"
+                                      placeholder="Опишите ваш творческий путь, DAW, плагины и мониторы..."></textarea>
                         </div>
 
                         <div class="form-group-modern">
@@ -109,6 +132,41 @@
                                     </div>
                                 }
                             </div>
+                        </div>
+
+                        @* --- НОВАЯ СЕКЦИЯ: УПРАВЛЕНИЕ УСЛУГАМИ --- *@
+                        <div class="section-label text-pink mt-5">Мои услуги и прайс</div>
+
+                        <div class="add-service-panel-modern">
+                            <input type="text" @bind="newServiceName" placeholder="Название услуги (напр. Сведение)" />
+                            <input type="number" @bind="newServicePrice" placeholder="Цена (₽)" />
+                            <button class="btn-add-service-pink" @onclick="AddService" title="Добавить услугу">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+
+                        <div class="services-list-modern mt-3">
+                            @if (services == null || !services.Any())
+                            {
+                                <div class="empty-services-note">
+                                    <i class="bi bi-info-circle me-2"></i> У вас пока нет активных услуг в прайс-листе.
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var s in services)
+                                {
+                                    <div class="service-edit-row">
+                                        <div class="s-main">
+                                            <span class="s-name">@s.Name</span>
+                                            <span class="s-price">@s.Price.ToString("N0") ₽</span>
+                                        </div>
+                                        <button class="btn-del-service-red" @onclick="() => DeleteService(s.Id)">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </div>
+                                }
+                            }
                         </div>
                     }
                     else
@@ -260,6 +318,7 @@
         overflow: hidden;
         border: 2px solid var(--pink);
         box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        background: #111;
     }
 
         .avatar-large-preview img {
@@ -267,6 +326,17 @@
             height: 100%;
             object-fit: cover;
         }
+
+    .avatar-placeholder-edit {
+        width: 100%;
+        height: 100%;
+        background: #222;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 4rem;
+        color: #444;
+    }
 
     .upload-overlay {
         position: absolute;
@@ -364,6 +434,101 @@
             box-shadow: 0 5px 15px rgba(233, 30, 99, 0.3);
         }
 
+    /* НОВЫЕ СТИЛИ ДЛЯ УСЛУГ */
+    .add-service-panel-modern {
+        display: flex;
+        gap: 12px;
+        background: rgba(255,255,255,0.02);
+        padding: 15px;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+
+        .add-service-panel-modern input {
+            background: rgba(0,0,0,0.3) !important;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 10px 15px;
+            color: white;
+            outline: none;
+        }
+
+            .add-service-panel-modern input[type="text"] {
+                flex-grow: 2;
+            }
+
+            .add-service-panel-modern input[type="number"] {
+                width: 130px;
+            }
+
+    .btn-add-service-pink {
+        background: var(--pink);
+        border: none;
+        color: white;
+        width: 45px;
+        border-radius: 12px;
+        font-size: 1.2rem;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-add-service-pink:hover {
+            transform: scale(1.05);
+            filter: brightness(1.2);
+        }
+
+    .service-edit-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 25px;
+        background: rgba(255,255,255,0.03);
+        border-radius: 18px;
+        margin-bottom: 12px;
+        border: 1px solid rgba(255,255,255,0.05);
+        transition: 0.2s;
+    }
+
+        .service-edit-row:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+    .s-name {
+        font-weight: 700;
+        color: white;
+    }
+
+    .s-price {
+        color: #00bcd4;
+        font-weight: 800;
+        margin-left: 20px;
+    }
+
+    .btn-del-service-red {
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.2);
+        cursor: pointer;
+        font-size: 1.2rem;
+        transition: 0.2s;
+    }
+
+        .btn-del-service-red:hover {
+            color: #ff5252;
+            transform: scale(1.1);
+        }
+
+    .empty-services-note {
+        text-align: center;
+        padding: 30px;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        background: rgba(255,255,255,0.01);
+        border-radius: 18px;
+        border: 1px dashed rgba(255,255,255,0.1);
+    }
+
     /* ФУТЕР */
     .edit-footer {
         padding: 35px 40px;
@@ -441,7 +606,7 @@
             transform: rotate(360deg);
         }
     }
-    /* КРАСИВЫЙ СКРОЛЛБАР ДЛЯ КОНТЕЙНЕРА */
+
     .edit-container-full::-webkit-scrollbar {
         width: 8px;
     }
@@ -452,28 +617,31 @@
     }
 
     .edit-container-full::-webkit-scrollbar-thumb {
-        background: rgba(233, 30, 99, 0.3); /* Полупрозрачный розовый */
+        background: rgba(233, 30, 99, 0.3);
         border-radius: 10px;
-        transition: 0.3s;
     }
 
         .edit-container-full::-webkit-scrollbar-thumb:hover {
-            background: var(--pink); /* Яркий розовый при наведении */
+            background: var(--pink);
         }
-
-    /* Для Firefox */
-    .edit-container-full {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(233, 30, 99, 0.3) rgba(0, 0, 0, 0.2);
-    }
 </style>
 
 @code {
     private UserProfile? user;
     private EngineerUpdateDto engineerDto = new();
     private List<Genre> allGenres = new();
+    private List<MusicService> services = new();
+
     private bool isSaving = false;
     private string? serverErrorMessage;
+
+    // Поля для смены пароля
+    private string newPassword = "";
+    private string confirmPassword = "";
+
+    // Поля для новой услуги
+    private string newServiceName = "";
+    private decimal newServicePrice;
 
     private string BaseApiUrl = "https://localhost:7237";
 
@@ -495,9 +663,42 @@
                     engineerDto.ExperienceYears = eng.ExperienceYears;
                     engineerDto.GenreIds = eng.Genres.Select(g => g.Id).ToList();
                 }
+                await LoadServices();
             }
         }
-        catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
+        catch (Exception ex) { Console.WriteLine($"Error init: {ex.Message}"); }
+    }
+
+    private async Task LoadServices()
+    {
+        if (user != null)
+            services = await Http.GetFromJsonAsync<List<MusicService>>($"{BaseApiUrl}/api/services/engineer/{user.Id}") ?? new();
+    }
+
+    private async Task AddService()
+    {
+        if (string.IsNullOrWhiteSpace(newServiceName) || newServicePrice <= 0 || user == null) return;
+
+        var service = new MusicService
+            {
+                EngineerId = user.Id,
+                Name = newServiceName,
+                Price = newServicePrice
+            };
+
+        var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/services", service);
+        if (res.IsSuccessStatusCode)
+        {
+            newServiceName = "";
+            newServicePrice = 0;
+            await LoadServices();
+        }
+    }
+
+    private async Task DeleteService(int id)
+    {
+        var res = await Http.DeleteAsync($"{BaseApiUrl}/api/services/{id}");
+        if (res.IsSuccessStatusCode) await LoadServices();
     }
 
     private string GetFullUrl(string? url)
@@ -536,13 +737,19 @@
     private async Task SaveProfile()
     {
         if (user == null) return;
-        isSaving = true;
         serverErrorMessage = null;
 
+        if (!string.IsNullOrEmpty(newPassword))
+        {
+            if (newPassword != confirmPassword) { serverErrorMessage = "Пароли не совпадают!"; return; }
+            if (newPassword.Length < 6) { serverErrorMessage = "Пароль должен быть не менее 6 символов."; return; }
+            user.Password = newPassword;
+        }
+
+        isSaving = true;
         try
         {
             var response = await Http.PutAsJsonAsync($"{BaseApiUrl}/api/profiles/{user.Id}", user);
-
             if (response.IsSuccessStatusCode)
             {
                 if (user.RoleId == 2)
@@ -552,15 +759,11 @@
             }
             else
             {
-                // Пытаемся прочитать ошибку от API (например: "Username already exists")
-                serverErrorMessage = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrEmpty(serverErrorMessage))
-                    serverErrorMessage = "Ошибка при сохранении. Проверьте данные.";
+                serverErrorMessage = "Ошибка при сохранении данных.";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
             serverErrorMessage = "Сетевая ошибка. Попробуйте позже.";
         }
         finally { isSaving = false; }

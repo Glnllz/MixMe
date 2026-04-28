@@ -1,239 +1,916 @@
 ﻿@page "/feed"
+@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
-<div class="feed-layout">
-    @* Приветственный блок / Hero *@
-    <section class="hero-section fade-in">
-        <div class="hero-text">
-            <h2>Добро пожаловать в MixMe</h2>
-            <p>У вас есть 3 активных проекта и 5 новых предложений.</p>
-        </div>
-        <button class="main-btn">Опубликовать заказ</button>
-    </section>
+<BackgroundGlow />
 
-    @* Секция фильтров / Категорий *@
-    <div class="feed-filters">
-        <button class="filter-chip active">Все заказы</button>
-        <button class="filter-chip">Рок</button>
-        <button class="filter-chip">Хип-хоп</button>
-        <button class="filter-chip">Поп</button>
-        <button class="filter-chip">Электроника</button>
-    </div>
+<div class="feed-layout scroll-styled">
+    <div class="feed-grid">
 
-    @* Основной поток постов *@
-    <section class="stream">
-        @foreach (var post in mockPosts)
-        {
-            <div class="stream-item fade-in">
-                <div class="item-main">
-                    <div class="author-avatar">@post.Username[0]</div>
-                    <div class="item-info">
-                        <div class="item-meta">
-                            <span class="author-name">@post.Username</span>
-                            <span class="dot">•</span>
-                            <span class="timestamp">@post.TimeAgo</span>
-                        </div>
-                        <h3 class="item-title">@post.Title</h3>
-                        <p class="item-desc">@post.Description</p>
+        @* --- ЛЕВАЯ КОЛОНКА (PROFILE & STATS) --- *@
+        <aside class="sidebar left fade-in">
+            <div class="glass-box profile-preview">
+                <div class="ava-main-wrapper" @onclick='() => Nav.NavigateTo("/profile")'>
+                    @if (!string.IsNullOrEmpty(Auth.User?.AvatarUrl))
+                    {
+                        <img src="@GetFullUrl(Auth.User.AvatarUrl)" alt="avatar" />
+                    }
+                    else
+                    {
+                        <div class="placeholder-ava"><i class="bi bi-person-fill"></i></div>
+                    }
+                </div>
+                <h3 class="user-display-name">@Auth.User?.Username</h3>
+                <div class="status-indicator">
+                    <span class="online-dot"></span> <span class="online-label">ONLINE</span>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <span class="val">@posts?.Count(p => p.UserId == Auth.User?.Id)</span>
+                        <p class="lbl">Постов</p>
+                    </div>
+                    <div class="stat-item">
+                        <span class="val">0</span>
+                        <p class="lbl">Проектов</p>
                     </div>
                 </div>
 
-                <div class="item-side">
-                    <div class="price-tag">@post.Budget ₽</div>
-                    <button class="action-btn-small">Откликнуться</button>
-                </div>
+                <button class="btn-dashboard-action" @onclick='() => Nav.NavigateTo("/profile/edit")'>
+                    <i class="bi bi-gear-wide-connected me-2"></i> Настройки
+                </button>
             </div>
-        }
-    </section>
+        </aside>
+
+        @* --- ЦЕНТРАЛЬНАЯ КОЛОНКА (STREAM) --- *@
+        <main class="main-stream">
+            <header class="feed-header">
+                <div class="title-block">
+                    <h1>Лента событий</h1>
+                    <p>Свежие новости индустрии и новые заказы</p>
+                </div>
+                <div class="filter-pills">
+                    <button class="pill @(activeFilter == 0 ? "active" : "")" @onclick="() => activeFilter = 0">Все</button>
+                    <button class="pill @(activeFilter == 2 ? "active" : "")" @onclick="() => activeFilter = 2">Инженеры</button>
+                    <button class="pill @(activeFilter == 1 ? "active" : "")" @onclick="() => activeFilter = 1">Заказчики</button>
+                </div>
+            </header>
+
+            @* БЛОК СОЗДАНИЯ ПОСТА *@
+            <section class="glass-box create-post-card">
+                <div class="create-top">
+                    <div class="mini-ava">
+                        @if (!string.IsNullOrEmpty(Auth.User?.AvatarUrl))
+                        {
+                            <img src="@GetFullUrl(Auth.User.AvatarUrl)" />
+                        }
+                        else
+                        {
+                            <div class="placeholder-ava mini"><i class="bi bi-person-fill"></i></div>
+                        }
+                    </div>
+                    <textarea @bind="newPostContent" placeholder="Поделитесь идеей или создайте заказ..."></textarea>
+                </div>
+
+                @if (!string.IsNullOrEmpty(tempImageUrl) || !string.IsNullOrEmpty(tempAudioUrl))
+                {
+                    <div class="upload-previews">
+                        @if (!string.IsNullOrEmpty(tempImageUrl))
+                        {
+                            <div class="prev-box img-prev">
+                                <img src="@GetFullUrl(tempImageUrl)" />
+                                <button class="remove-btn" @onclick="() => tempImageUrl = null"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(tempAudioUrl))
+                        {
+                            <div class="prev-box audio-prev">
+                                <i class="bi bi-music-note-beamed me-2"></i> Трек готов
+                                <button class="remove-btn" @onclick="() => tempAudioUrl = null"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="create-footer">
+                    <div class="media-tools">
+                        <label class="tool-icon" title="Загрузить фото">
+                            <i class="bi bi-image"></i>
+                            <InputFile OnChange="e => UploadFile(e, true)" hidden accept="image/*" />
+                        </label>
+                        <label class="tool-icon" title="Загрузить аудио">
+                            <i class="bi bi-file-earmark-music"></i>
+                            <InputFile OnChange="e => UploadFile(e, false)" hidden accept="audio/*" />
+                        </label>
+                    </div>
+                    <button class="btn-send-main" @onclick="CreatePost" disabled="@(isSending || string.IsNullOrWhiteSpace(newPostContent))">
+                        @if (isSending)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <span>Опубликовать</span>
+                    </button>
+                </div>
+            </section>
+
+            @* СПИСОК ПОСТОВ *@
+            <div class="stream-container">
+                @if (posts == null)
+                {
+                    <div class="stream-loader"><div class="spinner-border text-pink"></div><p>Синхронизация данных...</p></div>
+                }
+                else
+                {
+                    @foreach (var post in GetFilteredPosts())
+                    {
+                        <article class="glass-box post-card fade-in-up">
+                            <div class="post-card-header">
+                                <div class="author-part" @onclick='() => Nav.NavigateTo($"/profile/{post.UserId}")'>
+                                    <div class="post-ava">
+                                        @if (!string.IsNullOrEmpty(post.AvatarUrl))
+                                        {
+                                            <img src="@GetFullUrl(post.AvatarUrl)" />
+                                        }
+                                        else
+                                        {
+                                            <div class="placeholder-ava mini"><i class="bi bi-person-fill"></i></div>
+                                        }
+                                    </div>
+                                    <div class="author-meta">
+                                        <span class="user-name">@post.Username</span>
+                                        <span class="role-label @(post.RoleId == 2 ? "engineer" : "customer")">
+                                            @(post.RoleId == 2 ? "Professional Engineer" : "Verified Customer")
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="post-top-right">
+                                    <span class="post-time">@post.CreatedAt.ToString("HH:mm")</span>
+                                    @if (post.UserId == Auth.User?.Id)
+                                    {
+                                        <button class="btn-delete" @onclick="() => DeletePost(post.Id)" title="Удалить пост">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="post-body-content">@post.Content</div>
+
+                            @if (!string.IsNullOrEmpty(post.ImageUrl))
+                            {
+                                <div class="post-media-image"><img src="@GetFullUrl(post.ImageUrl)" alt="post media" /></div>
+                            }
+                            @if (!string.IsNullOrEmpty(post.AudioUrl))
+                            {
+                                <div class="post-media-audio"><audio controls src="@GetFullUrl(post.AudioUrl)"></audio></div>
+                            }
+
+                            <div class="post-card-footer">
+                                <button class="interaction-link @(post.IsLiked ? "liked" : "")" @onclick="() => HandleLike(post)">
+                                    <i class="bi @(post.IsLiked ? "bi-heart-fill" : "bi-heart")"></i>
+                                    <span>@post.LikeCount</span>
+                                </button>
+                                <button class="interaction-link" @onclick='() => Nav.NavigateTo($"/profile/{post.UserId}")'>
+                                    <i class="bi bi-chat-left-dots"></i> <span>Связаться</span>
+                                </button>
+                            </div>
+                        </article>
+                    }
+                }
+            </div>
+        </main>
+
+        @* --- ПРАВАЯ КОЛОНКА (WIDGETS) --- *@
+        <aside class="sidebar right fade-in">
+            <div class="glass-box widget-top">
+                <h4 class="widget-title">Топ инженеров</h4>
+                <div class="top-list">
+                    @if (topEngineers == null)
+                    {
+                        <p class="loading-small">Поиск лучших...</p>
+                    }
+                    else
+                    {
+                        @foreach (var eng in topEngineers)
+                        {
+                            <div class="top-item-row" @onclick='() => Nav.NavigateTo($"/profile/{eng.ProfileId}")'>
+                                <div class="mini-top-ava">
+                                    @if (!string.IsNullOrEmpty(eng.AvatarUrl))
+                                    {
+                                        <img src="@GetFullUrl(eng.AvatarUrl)" />
+                                    }
+                                    else
+                                    {
+                                        <div class="placeholder-ava mini"><i class="bi bi-person"></i></div>
+                                    }
+                                </div>
+                                <div class="mini-top-info">
+                                    <span class="top-name">@eng.Username</span>
+                                    <div class="top-rating"><i class="bi bi-star-fill me-1"></i> @eng.AvgRating.ToString("F1")</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <button class="btn-ghost-minimal mt-3 w-100" @onclick='() => Nav.NavigateTo("/search")'>Смотреть всех</button>
+            </div>
+        </aside>
+
+    </div>
 </div>
 
 <style>
+    :root {
+        --pink: #E91E63;
+        --pink-glow: rgba(233, 30, 99, 0.4);
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --text-dim: rgba(255, 255, 255, 0.4);
+    }
+
+    /* ОСНОВНОЙ ЛЕЙАУТ */
     .feed-layout {
-        width: 100%;
-        max-width: 900px; /* Узкий поток по центру — залог хорошего дизайна */
-        padding: 0 20px;
+        position: fixed;
+        inset: 70px 0 0 0;
+        overflow-y: auto;
+        padding: 40px 20px;
+        background: transparent;
     }
 
-    .hero-section {
-        background: linear-gradient(90deg, #1A1A1A, #121212);
-        border: 1px solid var(--border);
-        border-radius: 24px;
-        padding: 40px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 50px;
+    .feed-grid {
+        display: grid;
+        grid-template-columns: 280px 1fr 300px;
+        gap: 30px;
+        max-width: 1450px;
+        margin: 0 auto;
+        height: fit-content;
     }
 
-    .hero-text h2 {
-        font-size: 2rem;
-        font-weight: 800;
-        margin-bottom: 8px;
+    .glass-box {
+        background: var(--glass-bg);
+        backdrop-filter: blur(25px);
+        border: 1px solid var(--glass-border);
+        border-radius: 28px;
+        padding: 25px;
+        transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .hero-text p {
-        color: rgba(255,255,255,0.5);
-        font-size: 1.1rem;
+    /* ЛЕВАЯ ЧАСТЬ: ПРОФИЛЬ */
+    .profile-preview {
+        text-align: center;
+        margin-bottom: 20px;
     }
 
-    .main-btn {
-        background: var(--accent);
-        color: white;
-        border: none;
-        padding: 16px 32px;
-        border-radius: 16px;
-        font-weight: 700;
+    .ava-main-wrapper {
+        width: 110px;
+        height: 110px;
+        border-radius: 35px;
+        border: 3px solid var(--pink);
+        margin: 0 auto 15px;
+        overflow: hidden;
         cursor: pointer;
-        transition: 0.3s;
-    }
-
-        .main-btn:hover {
-            transform: scale(1.05);
-            filter: brightness(1.1);
-        }
-
-    /* Фильтры */
-    .feed-filters {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 30px;
-        overflow-x: auto;
-        padding-bottom: 10px;
-    }
-
-    .filter-chip {
-        background: var(--glass);
-        border: 1px solid var(--border);
-        color: rgba(255,255,255,0.6);
-        padding: 10px 20px;
-        border-radius: 12px;
-        white-space: nowrap;
-        cursor: pointer;
-        transition: 0.3s;
-    }
-
-        .filter-chip.active, .filter-chip:hover {
-            background: white;
-            color: black;
-            border-color: white;
-        }
-
-    /* Поток (Stream) */
-    .stream {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }
-
-    .stream-item {
-        background: var(--glass);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        transition: 0.3s;
-    }
-
-        .stream-item:hover {
-            background: rgba(255,255,255,0.07);
-            border-color: rgba(255,255,255,0.15);
-        }
-
-    .item-main {
-        display: flex;
-        gap: 24px;
-        align-items: flex-start;
-    }
-
-    .author-avatar {
-        width: 56px;
-        height: 56px;
-        background: #222;
-        border-radius: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 800;
-        font-size: 1.2rem;
-        color: var(--accent);
+        background: #111;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
     }
 
-    .item-meta {
+        .ava-main-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .placeholder-ava {
+        width: 100%;
+        height: 100%;
+        background: #222;
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 6px;
+        justify-content: center;
+        font-size: 3rem;
+        color: #444;
     }
 
-    .author-name {
-        font-weight: 700;
-        color: white;
-    }
+        .placeholder-ava.mini {
+            font-size: 1.5rem;
+        }
 
-    .dot {
-        color: rgba(255,255,255,0.2);
-    }
-
-    .timestamp {
-        color: rgba(255,255,255,0.4);
-        font-size: 0.85rem;
-    }
-
-    .item-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-
-    .item-desc {
-        color: rgba(255,255,255,0.6);
-        font-size: 0.95rem;
-        line-height: 1.5;
-        max-width: 500px;
-    }
-
-    .item-side {
-        text-align: right;
-    }
-
-    .price-tag {
+    .user-display-name {
         font-size: 1.4rem;
         font-weight: 800;
-        margin-bottom: 12px;
+        margin-bottom: 5px;
     }
 
-    .action-btn-small {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
+    .online-dot {
+        width: 8px;
+        height: 8px;
+        background: #4CAF50;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+    }
+
+    .online-label {
+        font-size: 0.7rem;
+        font-weight: 900;
+        color: #4CAF50;
+        letter-spacing: 1px;
+    }
+
+    .stats-row {
+        display: flex;
+        justify-content: space-around;
+        margin: 25px 0;
+        border-top: 1px solid var(--glass-border);
+        border-bottom: 1px solid var(--glass-border);
+        padding: 15px 0;
+    }
+
+    .stat-item .val {
+        display: block;
+        font-weight: 900;
+        font-size: 1.3rem;
         color: white;
-        padding: 10px 20px;
-        border-radius: 12px;
-        font-weight: 600;
+    }
+
+    .stat-item .lbl {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .btn-dashboard-action {
+        width: 100%;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--glass-border);
+        color: white;
+        padding: 12px;
+        border-radius: 14px;
+        font-weight: 700;
         cursor: pointer;
         transition: 0.3s;
     }
 
-        .action-btn-small:hover {
-            background: var(--accent);
-            border-color: var(--accent);
+        .btn-dashboard-action:hover {
+            border-color: var(--pink);
+            color: var(--pink);
+            background: rgba(233,30,99,0.05);
         }
+
+    /* ЦЕНТРАЛЬНАЯ ЧАСТЬ */
+    .feed-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-bottom: 30px;
+    }
+
+    .title-block h1 {
+        font-size: 2.8rem;
+        font-weight: 900;
+        letter-spacing: -2px;
+        margin: 0;
+    }
+
+    .title-block p {
+        color: var(--text-dim);
+        font-size: 1.1rem;
+    }
+
+    .filter-pills {
+        display: flex;
+        gap: 10px;
+        background: rgba(255,255,255,0.03);
+        padding: 6px;
+        border-radius: 18px;
+    }
+
+    .pill {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        padding: 8px 22px;
+        border-radius: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .pill.active {
+            background: white;
+            color: black;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+    /* СОЗДАНИЕ ПОСТА */
+    .create-post-card {
+        border-top: 5px solid var(--pink);
+        margin-bottom: 35px;
+    }
+
+    .create-top {
+        display: flex;
+        gap: 20px;
+    }
+
+    .mini-ava {
+        width: 50px;
+        height: 50px;
+        border-radius: 15px;
+        overflow: hidden;
+        background: #222;
+        flex-shrink: 0;
+    }
+
+        .mini-ava img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .create-top textarea {
+        flex-grow: 1;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 1.2rem;
+        outline: none;
+        resize: none;
+        min-height: 80px;
+        padding-top: 10px;
+    }
+
+    .upload-previews {
+        display: flex;
+        gap: 12px;
+        margin-top: 15px;
+    }
+
+    .prev-box {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .img-prev {
+        width: 85px;
+        height: 85px;
+        border: 1px solid var(--glass-border);
+    }
+
+        .img-prev img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .audio-prev {
+        background: var(--pink);
+        color: white;
+        padding: 10px 15px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+    }
+
+    .remove-btn {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: rgba(0,0,0,0.7);
+        border: none;
+        color: white;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+    }
+
+    .create-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--glass-border);
+    }
+
+    .tool-icon {
+        font-size: 1.5rem;
+        color: var(--text-dim);
+        margin-right: 18px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .tool-icon:hover {
+            color: var(--pink);
+            transform: translateY(-2px);
+        }
+
+    .btn-send-main {
+        background: var(--pink);
+        color: white;
+        border: none;
+        padding: 12px 35px;
+        border-radius: 16px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.3s;
+        box-shadow: 0 8px 20px var(--pink-glow);
+    }
+
+        .btn-send-main:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+        }
+
+    /* КАРТОЧКИ ПОСТОВ */
+    .post-card {
+        margin-bottom: 25px;
+        border-radius: 32px;
+    }
+
+        .post-card:hover {
+            border-color: rgba(233,30,99,0.3);
+            transform: translateY(-4px);
+        }
+
+    .post-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .author-part {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .post-ava {
+        width: 55px;
+        height: 55px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #222;
+    }
+
+        .post-ava img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .user-name {
+        display: block;
+        font-weight: 800;
+        font-size: 1.15rem;
+        color: white;
+    }
+
+    .role-label {
+        font-size: 0.7rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+        .role-label.engineer {
+            color: var(--pink);
+        }
+
+        .role-label.customer {
+            color: #00bcd4;
+        }
+
+    .post-top-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .post-time {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .btn-delete {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 1.1rem;
+    }
+
+        .btn-delete:hover {
+            color: #ff5252;
+        }
+
+    .post-body-content {
+        font-size: 1.15rem;
+        line-height: 1.7;
+        color: rgba(255,255,255,0.9);
+        margin-bottom: 25px;
+        white-space: pre-wrap;
+    }
+
+    .post-media-image {
+        border-radius: 20px;
+        overflow: hidden;
+        margin-bottom: 20px;
+        border: 1px solid var(--glass-border);
+    }
+
+        .post-media-image img {
+            width: 100%;
+            display: block;
+        }
+
+    .post-media-audio {
+        margin-bottom: 25px;
+    }
+
+        .post-media-audio audio {
+            width: 100%;
+            filter: invert(1) hue-rotate(180deg) opacity(0.7);
+            height: 45px;
+        }
+
+    .post-card-footer {
+        display: flex;
+        gap: 20px;
+        border-top: 1px solid var(--glass-border);
+        padding-top: 20px;
+    }
+
+    .interaction-link {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .interaction-link:hover {
+            color: var(--pink);
+        }
+
+        .interaction-link.liked {
+            color: var(--pink);
+        }
+
+        .interaction-link i {
+            font-size: 1.3rem;
+        }
+
+    /* ПРАВАЯ ЧАСТЬ: ТОП */
+    .widget-top {
+        padding: 25px;
+    }
+
+    .widget-title {
+        font-weight: 900;
+        color: var(--pink);
+        text-transform: uppercase;
+        font-size: 1rem;
+        margin-bottom: 25px;
+        letter-spacing: 1px;
+    }
+
+    .top-item-row {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        align-items: center;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .top-item-row:hover {
+            transform: translateX(8px);
+        }
+
+    .mini-top-ava {
+        width: 50px;
+        height: 50px;
+        border-radius: 15px;
+        overflow: hidden;
+        background: #222;
+    }
+
+        .mini-top-ava img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .top-name {
+        display: block;
+        font-weight: 800;
+        font-size: 1rem;
+        color: white;
+    }
+
+    .top-rating {
+        font-size: 0.85rem;
+        color: #FFC107;
+        font-weight: 800;
+    }
+
+    .btn-ghost-minimal {
+        width: 100%;
+        background: transparent;
+        border: 1px solid var(--glass-border);
+        color: var(--text-dim);
+        padding: 10px;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .btn-ghost-minimal:hover {
+            border-color: var(--pink);
+            color: white;
+        }
+
+    /* СКРОЛЛБАР */
+    .scroll-styled::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .scroll-styled::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .scroll-styled::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+    }
+
+        .scroll-styled::-webkit-scrollbar-thumb:hover {
+            background: var(--pink);
+        }
+
+    /* АНИМАЦИИ */
+    .fade-in-up {
+        animation: fadeInUp 0.5s ease-out forwards;
+    }
+
+    @@keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 </style>
 
 @code {
-    private List<PostMock> mockPosts = new()
-    {
-        new PostMock { Username = "FutureSounds", TimeAgo = "15 мин назад", Title = "Нужен мощный мастеринг для Trap альбома", Description = "8 треков. Нужен жирный низ и пробивная середина. Жду профи со своим стилем.", Budget = 15000 },
-        new PostMock { Username = "VintageBoy", TimeAgo = "1 час назад", Title = "Сведение гитарного инди-попа", Description = "Лоу-фай вайб, много реверберации. Нужно собрать все в плотный микс.", Budget = 6000 },
-        new PostMock { Username = "StudioX", TimeAgo = "3 часа назад", Title = "Очистка вокала от шумов", Description = "Запись сделана в плохих условиях, нужно убрать эхо и шум вентилятора.", Budget = 2500 }
-    };
+    private List<PostViewModel>? posts;
+    private List<TopEngineerViewModel>? topEngineers;
+    private string newPostContent = "";
+    private string? tempImageUrl, tempAudioUrl;
+    private int activeFilter = 0;
+    private bool isSending = false;
+    private string BaseApiUrl = "https://localhost:7237";
 
-    public class PostMock
+    protected override async Task OnInitializedAsync()
     {
-        public string Username { get; set; } = "";
-        public string TimeAgo { get; set; } = "";
-        public string Title { get; set; } = "";
-        public string Description { get; set; } = "";
-        public int Budget { get; set; }
+        await LoadData();
     }
+
+    private async Task LoadData()
+    {
+        if (Auth.User == null) return;
+        try
+        {
+            // Отправляем ID текущего пользователя, чтобы сервер сказал, лайкнули ли мы пост
+            posts = await Http.GetFromJsonAsync<List<PostViewModel>>($"{BaseApiUrl}/api/posts?currentUserId={Auth.User.Id}");
+            topEngineers = await Http.GetFromJsonAsync<List<TopEngineerViewModel>>($"{BaseApiUrl}/api/engineers/top");
+        }
+        catch (Exception ex) { Console.WriteLine(ex.Message); }
+    }
+
+    private async Task HandleLike(PostViewModel post)
+    {
+        var res = await Http.PostAsync($"{BaseApiUrl}/api/posts/{post.Id}/like?userId={Auth.User!.Id}", null);
+        if (res.IsSuccessStatusCode)
+        {
+            // Мгновенное визуальное обновление (оптимистичный UI)
+            if (post.IsLiked)
+            {
+                post.LikeCount--; post.IsLiked = false;
+            }
+            else
+            {
+                post.LikeCount++; post.IsLiked = true;
+            }
+        }
+    }
+
+    private async Task DeletePost(int id)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить этот пост?");
+        if (!confirmed) return;
+
+        var res = await Http.DeleteAsync($"{BaseApiUrl}/api/posts/{id}?userId={Auth.User!.Id}");
+        if (res.IsSuccessStatusCode)
+        {
+            await LoadData(); // Перезагружаем ленту
+        }
+    }
+
+    private async Task UploadFile(InputFileChangeEventArgs e, bool isImage)
+    {
+        var content = new MultipartFormDataContent();
+        var file = e.File;
+        // Ограничение 50МБ
+        content.Add(new StreamContent(file.OpenReadStream(50 * 1024 * 1024)), "file", file.Name);
+
+        var res = await Http.PostAsync($"{BaseApiUrl}/api/Files/upload", content);
+        if (res.IsSuccessStatusCode)
+        {
+            var result = await res.Content.ReadFromJsonAsync<UploadResult>();
+            if (isImage) tempImageUrl = result?.url; else tempAudioUrl = result?.url;
+        }
+    }
+
+    private async Task CreatePost()
+    {
+        if (Auth.User == null || string.IsNullOrWhiteSpace(newPostContent)) return;
+        isSending = true;
+
+        var post = new Post
+            {
+                UserId = Auth.User.Id,
+                Content = newPostContent,
+                ImageUrl = tempImageUrl,
+                AudioUrl = tempAudioUrl
+            };
+
+        var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/posts", post);
+        if (res.IsSuccessStatusCode)
+        {
+            newPostContent = ""; tempImageUrl = null; tempAudioUrl = null;
+            await LoadData();
+        }
+        isSending = false;
+    }
+
+    private IEnumerable<PostViewModel> GetFilteredPosts()
+    {
+        if (posts == null) return new List<PostViewModel>();
+        if (activeFilter == 0) return posts;
+        return posts.Where(p => p.RoleId == activeFilter);
+    }
+
+    private string GetFullUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return "images/default-avatar.png";
+        return url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}";
+    }
+
+    // Вспомогательные классы для данных
+    public class PostViewModel
+    {
+        public int Id { get; set; }
+        public Guid UserId { get; set; }
+        public string Content { get; set; } = "";
+        public string? ImageUrl { get; set; }
+        public string? AudioUrl { get; set; }
+        public int LikeCount { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string Username { get; set; } = "";
+        public string? AvatarUrl { get; set; }
+        public int RoleId { get; set; }
+        public bool IsLiked { get; set; }
+    }
+
+    public class TopEngineerViewModel
+    {
+        public Guid ProfileId { get; set; }
+        public string Username { get; set; } = "";
+        public string? AvatarUrl { get; set; }
+        public double AvgRating { get; set; }
+    }
+
+    public class UploadResult { public string url { get; set; } = ""; }
 }

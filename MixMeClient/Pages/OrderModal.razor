@@ -1,0 +1,134 @@
+﻿@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop fade-in" @onclick="Close">
+        <div class="modal-dialog-pro" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Заказать у @EngineerName</h3>
+                <button class="btn-close" @onclick="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (services.Any())
+                {
+                    <p>Выберите услугу:</p>
+                    <div class="services-list">
+                        @foreach (var s in services)
+                        {
+                            <div class="service-item @(selectedService?.Id == s.Id ? "active" : "")" @onclick="() => selectedService = s">
+                                <span class="name">@s.Name</span>
+                                <span class="price">@s.Price.ToString("N0") ₽</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">У инженера еще нет прайс-листа.</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn-confirm" @onclick="ConfirmOrder" disabled="@(selectedService == null || isCreating)">
+                    @(isCreating ? "Создание..." : "Подтвердить заказ")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.8);
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 5000;
+    }
+
+    .modal-dialog-pro {
+        background: #141414;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 30px;
+        width: 450px;
+        padding: 30px;
+        box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 2rem;
+        cursor: pointer;
+    }
+
+    .service-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 15px;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 15px;
+        cursor: pointer;
+        transition: 0.2s;
+        margin-bottom: 10px;
+    }
+
+        .service-item.active {
+            border-color: #E91E63;
+            background: rgba(233,30,99,0.1);
+        }
+
+    .btn-confirm {
+        width: 100%;
+        background: #E91E63;
+        color: white;
+        border: none;
+        padding: 15px;
+        border-radius: 15px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    [Parameter] public Guid EngineerId { get; set; }
+    [Parameter] public string EngineerName { get; set; } = "";
+    private bool IsVisible = false, isCreating = false;
+    private List<MusicService> services = new();
+    private MusicService? selectedService;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    public async Task Show()
+    {
+        services = await Http.GetFromJsonAsync<List<MusicService>>($"{BaseApiUrl}/api/services/engineer/{EngineerId}") ?? new();
+        IsVisible = true; StateHasChanged();
+    }
+    public void Close() { IsVisible = false; }
+
+    private async Task ConfirmOrder()
+    {
+        if (selectedService == null || Auth.User == null) return;
+        isCreating = true;
+        var dto = new { CustomerId = Auth.User.Id, EngineerId = EngineerId, ServiceId = selectedService.Id, TotalAmount = selectedService.Price };
+        var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/orders/create", dto);
+        if (res.IsSuccessStatusCode)
+        {
+            var newId = await res.Content.ReadFromJsonAsync<Guid>();
+            Nav.NavigateTo($"/order/{newId}");
+        }
+        isCreating = false;
+    }
+}

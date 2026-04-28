@@ -20,34 +20,106 @@ public class OrdersController : ControllerBase
         _paymentService = paymentService;
     }
 
-    [HttpPost]
-    public async Task<ActionResult<string>> CreateOrder([FromBody] Order order)
+    [HttpPost("create")]
+    public async Task<ActionResult<Guid>> CreateOrder(CreateOrderDto dto)
     {
-        try
+        var newOrder = new Order
         {
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
+            Id = Guid.NewGuid(),
+            CustomerId = dto.CustomerId,
+            EngineerId = dto.EngineerId,
+            ServiceId = dto.ServiceId,
+            TotalAmount = dto.TotalAmount,
+            Status = "WaitingForPayment", // Начальный статус
+            CreatedAt = DateTime.UtcNow
+        };
 
-            string returnUrl = "https://localhost:7246/order-success/" + order.Id;
+        _context.Orders.Add(newOrder);
+        await _context.SaveChangesAsync();
 
-            var payment = await _paymentService.CreateOrderPayment(order, returnUrl);
-
-            order.PaymentId = payment.Id;
-            order.Status = "WaitingForPayment";
-            await _context.SaveChangesAsync();
-
-            // ИСПРАВЛЕНИЕ ЗДЕСЬ:
-            // В версии 4.x чаще всего ссылка лежит напрямую в payment.Confirmation.ConfirmationUrl
-            if (payment.Confirmation?.ConfirmationUrl != null)
-            {
-                return Ok(payment.Confirmation.ConfirmationUrl);
-            }
-
-            return BadRequest("Не удалось получить ссылку на оплату. Проверьте параметры подтверждения.");
-        }
-        catch (Exception ex)
+        // Создаем первое системное сообщение в чате
+        var service = await _context.Services.FindAsync(dto.ServiceId);
+        _context.Messages.Add(new Message
         {
-            return BadRequest($"Ошибка при создании платежа: {ex.Message}");
-        }
+            OrderId = newOrder.Id,
+            SenderId = Guid.Empty, // Системное сообщение
+            Content = $"Заказ на услугу '{service?.Name}' создан. Ожидается оплата.",
+            SentAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+
+        return Ok(newOrder.Id); // Возвращаем ID нового заказа
+    }
+
+    // Вспомогательный класс для передачи данных
+    public class CreateOrderDto
+    {
+        public Guid CustomerId { get; set; }
+        public Guid EngineerId { get; set; }
+        public int ServiceId { get; set; }
+        public decimal TotalAmount { get; set; }
+    }
+
+    [HttpGet("user/{userId}")]
+    public async Task<ActionResult<IEnumerable<object>>> GetUserOrders(Guid userId)
+    {
+        var orders = await _context.Orders
+            .Where(o => o.CustomerId == userId || o.EngineerId == userId)
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new {
+                Id = o.Id, // <--- Оставляем просто Id для всех
+                TotalAmount = o.TotalAmount,
+                Status = o.Status,
+                CreatedAt = o.CreatedAt,
+                PartnerName = _context.Profiles
+                    .Where(p => p.Id == (o.CustomerId == userId ? o.EngineerId : o.CustomerId))
+                    .Select(p => p.Username).FirstOrDefault(),
+                PartnerAvatar = _context.Profiles
+                    .Where(p => p.Id == (o.CustomerId == userId ? o.EngineerId : o.CustomerId))
+                    .Select(p => p.AvatarUrl).FirstOrDefault(),
+                // Добавляем текст последнего сообщения для страницы Чатов
+                LastMessage = _context.Messages
+                    .Where(m => m.OrderId == o.Id)
+                    .OrderByDescending(m => m.SentAt)
+                    .Select(m => m.Content)
+                    .FirstOrDefault() ?? "Чат создан",
+                ServiceName = _context.Services.Where(s => s.Id == o.ServiceId).Select(s => s.Name).FirstOrDefault()
+            })
+            .ToListAsync();
+
+        return Ok(orders);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<object>> GetOrderDetails(Guid id)
+    {
+        var order = await _context.Orders
+            .Select(o => new {
+                o.Id,
+                o.Status,
+                o.TotalAmount,
+                o.CustomerId,
+                o.EngineerId,
+                CustomerName = _context.Profiles.Where(p => p.Id == o.CustomerId).Select(p => p.Username).FirstOrDefault(),
+                EngineerName = _context.Profiles.Where(p => p.Id == o.EngineerId).Select(p => p.Username).FirstOrDefault(),
+                ServiceName = _context.Services.Where(s => s.Id == o.ServiceId).Select(s => s.Name).FirstOrDefault(),
+                // История сообщений из БД (опционально)
+                Messages = _context.Messages.Where(m => m.OrderId == id).OrderBy(m => m.SentAt).ToList()
+            })
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null) return NotFound();
+        return Ok(order);
+    }
+
+    // Смена статуса заказа (например, "Принять работу")
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] string newStatus)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null) return NotFound();
+        order.Status = newStatus;
+        await _context.SaveChangesAsync();
+        return Ok();
     }
 }

@@ -1,0 +1,381 @@
+﻿@page "/orders"
+@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+@using System.Text.Json.Serialization
+
+<BackgroundGlow />
+
+<div class="orders-page-container scroll-styled">
+    <div class="orders-content">
+
+        <header class="orders-header fade-in">
+            <div class="h-left">
+                <h1>Мои проекты</h1>
+                <p>Управление активными заказами и история сделок</p>
+            </div>
+            <div class="h-right">
+                <button class="btn-new-order" @onclick='() => Nav.NavigateTo("/search")'>
+                    <i class="bi bi-plus-lg me-2"></i> Новый заказ
+                </button>
+            </div>
+        </header>
+
+        @* --- ТАБЫ ФИЛЬТРАЦИИ --- *@
+        <div class="orders-tabs fade-in">
+            <button class="tab-item @(activeTab == "all" ? "active" : "")" @onclick='() => activeTab = "all"'>Все</button>
+            <button class="tab-item @(activeTab == "active" ? "active" : "")" @onclick='() => activeTab = "active"'>В работе</button>
+            <button class="tab-item @(activeTab == "pending" ? "active" : "")" @onclick='() => activeTab = "pending"'>Оплата</button>
+            <button class="tab-item @(activeTab == "done" ? "active" : "")" @onclick='() => activeTab = "done"'>Завершены</button>
+        </div>
+
+        @* --- СПИСОК ЗАКАЗОВ --- *@
+        <div class="orders-list">
+            @if (orders == null)
+            {
+                <div class="loader-box"><div class="spinner-border text-pink"></div></div>
+            }
+            else if (!GetFilteredOrders().Any())
+            {
+                <div class="empty-orders glass-card fade-in">
+                    <i class="bi bi-folder2-open"></i>
+                    <h3>Проектов пока нет</h3>
+                    <p>Найдите инженера и начните создание своего хита!</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var order in GetFilteredOrders())
+                {
+                    <div class="order-card glass-card fade-in-up" @onclick='() => Nav.NavigateTo($"/order/{order.Id}")'>
+                        <div class="order-main-info">
+                            <div class="partner-ava">
+                                @if (!string.IsNullOrEmpty(order.PartnerAvatar))
+                                {
+                                    <img src="@GetFullUrl(order.PartnerAvatar)" />
+                                }
+                                else
+                                {
+                                    <div class="placeholder-ava mini"><i class="bi bi-person"></i></div>
+                                }
+                            </div>
+                            <div class="project-details">
+                                <h4>@order.ServiceName</h4>
+                                <p>Партнер: <span>@order.PartnerName</span></p>
+                            </div>
+                        </div>
+
+                        <div class="order-status-zone">
+                            <div class="status-badge @order.Status.ToLower()">
+                                @TranslateStatus(order.Status)
+                            </div>
+                            <div class="order-date">от @order.CreatedAt.ToString("dd.MM.yyyy")</div>
+                        </div>
+
+                        <div class="order-price-zone">
+                            <div class="price-val">@order.TotalAmount.ToString("N0") ₽</div>
+                            <div class="view-link">Детали <i class="bi bi-chevron-right"></i></div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .orders-page-container {
+        position: fixed;
+        inset: 70px 0 0 0;
+        overflow-y: auto;
+        padding: 60px 20px;
+    }
+
+    .orders-content {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .orders-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 40px;
+    }
+
+        .orders-header h1 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            letter-spacing: -2px;
+            margin: 0;
+        }
+
+        .orders-header p {
+            color: rgba(255,255,255,0.4);
+            font-size: 1.1rem;
+        }
+
+    .btn-new-order {
+        background: #E91E63;
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-new-order:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(233,30,99,0.3);
+        }
+
+    /* ТАБЫ */
+    .orders-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 15px;
+    }
+
+    .tab-item {
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.4);
+        font-weight: 700;
+        padding: 8px 20px;
+        cursor: pointer;
+        transition: 0.3s;
+        position: relative;
+    }
+
+        .tab-item.active {
+            color: #E91E63;
+        }
+
+            .tab-item.active::after {
+                content: '';
+                position: absolute;
+                bottom: -16px;
+                left: 0;
+                right: 0;
+                height: 3px;
+                background: #E91E63;
+                border-radius: 10px 10px 0 0;
+            }
+
+    /* КАРТОЧКИ */
+    .glass-card {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(25px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 24px;
+        padding: 25px;
+        transition: 0.3s;
+    }
+
+    .order-card {
+        display: grid;
+        grid-template-columns: 1fr 200px 180px;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 15px;
+        cursor: pointer;
+    }
+
+        .order-card:hover {
+            border-color: #E91E63;
+            transform: translateX(10px);
+            background: rgba(255,255,255,0.05);
+        }
+
+    .order-main-info {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .partner-ava {
+        width: 55px;
+        height: 55px;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #222;
+    }
+
+        .partner-ava img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .project-details h4 {
+        font-size: 1.15rem;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .project-details p {
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.4);
+        margin-top: 3px;
+    }
+
+    .project-details span {
+        color: white;
+        font-weight: 600;
+    }
+
+    /* СТАТУСЫ */
+    .status-badge {
+        display: inline-block;
+        padding: 6px 16px;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+        .status-badge.waitingforpayment {
+            background: rgba(255, 193, 7, 0.1);
+            color: #FFC107;
+        }
+
+        .status-badge.inprogress {
+            background: rgba(0, 188, 212, 0.1);
+            color: #00bcd4;
+        }
+
+        .status-badge.completed {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4CAF50;
+        }
+
+        .status-badge.created {
+            background: rgba(255,255,255,0.05);
+            color: white;
+        }
+
+    .order-date {
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.2);
+        margin-top: 8px;
+        font-weight: 600;
+    }
+
+    .order-price-zone {
+        text-align: right;
+    }
+
+    .price-val {
+        font-size: 1.3rem;
+        font-weight: 900;
+        color: white;
+    }
+
+    .view-link {
+        font-size: 0.85rem;
+        color: #E91E63;
+        font-weight: 700;
+        margin-top: 5px;
+        opacity: 0;
+        transition: 0.3s;
+    }
+
+    .order-card:hover .view-link {
+        opacity: 1;
+    }
+
+    .empty-orders {
+        text-align: center;
+        padding: 80px;
+        color: rgba(255,255,255,0.2);
+    }
+
+        .empty-orders i {
+            font-size: 4rem;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+    .fade-in-up {
+        animation: fadeInUp 0.5s ease-out forwards;
+    }
+
+    @@keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    private List<OrderViewModel>? orders;
+    private string activeTab = "all";
+    private string BaseApiUrl = "https://localhost:7237";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.User == null) return;
+        orders = await Http.GetFromJsonAsync<List<OrderViewModel>>($"{BaseApiUrl}/api/orders/user/{Auth.User.Id}");
+    }
+
+    private IEnumerable<OrderViewModel> GetFilteredOrders()
+    {
+        if (orders == null) return new List<OrderViewModel>();
+        return activeTab switch
+        {
+            "active" => orders.Where(o => o.Status == "InProgress"),
+            "pending" => orders.Where(o => o.Status == "WaitingForPayment"),
+            "done" => orders.Where(o => o.Status == "Completed"),
+            _ => orders
+        };
+    }
+
+    private string TranslateStatus(string status) => status switch
+    {
+        "Created" => "Создан",
+        "WaitingForPayment" => "Ожидает оплаты",
+        "InProgress" => "В работе",
+        "Completed" => "Завершен",
+        "Cancelled" => "Отменен",
+        _ => status
+    };
+
+    private string GetFullUrl(string? url) => string.IsNullOrEmpty(url) ? "images/default-avatar.png" : (url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}");
+
+    public class OrderViewModel
+    {
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+
+        [JsonPropertyName("totalAmount")]
+        public decimal TotalAmount { get; set; }
+
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = "";
+
+        [JsonPropertyName("createdAt")]
+        public DateTime CreatedAt { get; set; }
+
+        [JsonPropertyName("partnerName")]
+        public string PartnerName { get; set; } = "";
+
+        [JsonPropertyName("partnerAvatar")]
+        public string? PartnerAvatar { get; set; }
+
+        [JsonPropertyName("serviceName")]
+        public string ServiceName { get; set; } = "";
+    }
+
+}

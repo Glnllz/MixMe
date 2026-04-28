@@ -29,6 +29,7 @@ public class ServicesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<MusicService>> AddService(MusicService service)
     {
+        // Привязываем услугу к текущему инженеру
         _context.Services.Add(service);
         await _context.SaveChangesAsync();
         return Ok(service);

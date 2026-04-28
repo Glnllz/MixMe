@@ -63,25 +63,29 @@ public class ProfilesController : ControllerBase
         return Ok(profile);
     }
 
+    // MixMe/Controllers/ProfilesController.cs -> Метод UpdateProfile
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateProfile(Guid id, UserProfile updateDto)
     {
         var profile = await _context.Profiles.FindAsync(id);
         if (profile == null) return NotFound();
 
-        // Проверка уникальности юзернейма, если он изменился
         if (profile.Username != updateDto.Username)
         {
             bool exists = await _context.Profiles
                 .AnyAsync(p => p.Username.ToLower() == updateDto.Username.ToLower() && p.Id != id);
-
-            if (exists)
-                return BadRequest("Это имя пользователя уже занято другим участником.");
+            if (exists) return BadRequest("Это имя пользователя уже занято.");
         }
 
-        profile.Username = updateDto.Username; // Теперь разрешаем изменение
+        profile.Username = updateDto.Username;
         profile.FullName = updateDto.FullName;
         profile.AvatarUrl = updateDto.AvatarUrl;
+
+        // Если пароль пришел не пустой, обновляем его
+        if (!string.IsNullOrWhiteSpace(updateDto.Password))
+        {
+            profile.Password = updateDto.Password; // В идеале тут должен быть BCrypt.HashPassword
+        }
 
         await _context.SaveChangesAsync();
         return NoContent();

@@ -1,0 +1,444 @@
+﻿@page "/order/{OrderId:guid}"
+@using Microsoft.AspNetCore.SignalR.Client
+@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<BackgroundGlow />
+
+<div class="order-details-layout">
+    <div class="details-grid">
+
+        @* --- ЛЕВАЯ ЧАСТЬ: ИНФО И ФАЙЛЫ --- *@
+        <section class="info-panel fade-in">
+            <div class="glass-box status-card">
+                <div class="status-header">
+                    <span class="badge-status @order?.Status.ToLower()">@TranslateStatus(order?.Status)</span>
+                    <h3>@order?.ServiceName</h3>
+                </div>
+                <div class="workflow-steps">
+                    <div class="step @GetStepClass(1)"><span>1</span><p>Оплата</p></div>
+                    <div class="step @GetStepClass(2)"><span>2</span><p>В работе</p></div>
+                    <div class="step @GetStepClass(3)"><span>3</span><p>Проверка</p></div>
+                    <div class="step @GetStepClass(4)"><span>4</span><p>Готово</p></div>
+                </div>
+            </div>
+
+            <div class="glass-box files-widget">
+                <h4><i class="bi bi-folder2-open me-2"></i> Файлы проекта</h4>
+                <div class="file-list">
+                    <div class="file-item">
+                        <i class="bi bi-file-earmark-zip"></i>
+                        <div class="f-info"><span>Stems_Archive.zip</span><p>Архив с дорожками</p></div>
+                        <button class="btn-download"><i class="bi bi-download"></i></button>
+                    </div>
+                </div>
+
+                @if (Auth.User?.RoleId == 2 && order?.Status == "InProgress")
+                {
+                    <button class="btn-upload-result w-100 mt-3">
+                        <i class="bi bi-cloud-upload me-2"></i> Загрузить результат
+                    </button>
+                }
+            </div>
+
+            @if (Auth.User?.RoleId == 1 && order?.Status == "WaitingForPayment")
+            {
+                <button class="btn-pay-now fade-in" @onclick="GoToPayment">
+                    Оплатить @order?.TotalAmount.ToString("N0") ₽ <i class="bi bi-credit-card-2-back ms-2"></i>
+                </button>
+            }
+        </section>
+
+        @* --- ПРАВАЯ ЧАСТЬ: ЧАТ (SignalR) --- *@
+        <section class="chat-panel glass-box fade-in">
+            <div class="chat-header">
+                <i class="bi bi-chat-dots me-2"></i> Чат с @(Auth.User?.RoleId == 1 ? order?.EngineerName : order?.CustomerName)
+            </div>
+
+            <div class="messages-area scroll-styled" id="msgContainer">
+                @foreach (var msg in chatMessages)
+                {
+                    <div class="message-bubble @(msg.User == Auth.User?.Username ? "me" : "partner")">
+                        <div class="msg-content">@msg.Text</div>
+                        <div class="msg-time">@DateTime.Now.ToString("HH:mm")</div>
+                    </div>
+                }
+            </div>
+
+            <div class="chat-input-zone">
+                <textarea @bind="newMessage" @onkeyup="HandleKeyPress" placeholder="Введите сообщение..."></textarea>
+                <button class="btn-send" @onclick="SendMessage" disabled="@(!hubConnection?.State.Equals(HubConnectionState.Connected) ?? true)">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<style>
+    .order-details-layout {
+        position: fixed;
+        inset: 70px 0 0 0;
+        padding: 40px 5%;
+        overflow: hidden;
+    }
+
+    .details-grid {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 30px;
+        height: 100%;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .glass-box {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(25px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 28px;
+        padding: 25px;
+    }
+
+    /* Workflow */
+    .workflow-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+        position: relative;
+    }
+
+        .workflow-steps::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255,255,255,0.05);
+            z-index: 0;
+        }
+
+    .step {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        opacity: 0.3;
+    }
+
+        .step.active {
+            opacity: 1;
+        }
+
+        .step span {
+            width: 32px;
+            height: 32px;
+            background: #222;
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-weight: 800;
+            font-size: 0.8rem;
+        }
+
+        .step.active span {
+            background: #E91E63;
+            border-color: #E91E63;
+            box-shadow: 0 0 15px rgba(233,30,99,0.5);
+        }
+
+        .step p {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+    /* ЧАТ */
+    .chat-panel {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .chat-header {
+        padding: 20px 30px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        font-weight: 800;
+    }
+
+    .messages-area {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 30px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .message-bubble {
+        max-width: 70%;
+        padding: 12px 20px;
+        border-radius: 18px;
+        font-size: 1rem;
+        position: relative;
+    }
+
+        .message-bubble.me {
+            align-self: flex-end;
+            background: #E91E63;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-bubble.partner {
+            align-self: flex-start;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-bottom-left-radius: 4px;
+        }
+
+    .msg-time {
+        font-size: 0.65rem;
+        opacity: 0.5;
+        margin-top: 5px;
+        text-align: right;
+    }
+
+    .chat-input-zone {
+        padding: 20px;
+        background: rgba(0,0,0,0.2);
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+        .chat-input-zone textarea {
+            flex-grow: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            color: white;
+            padding: 12px;
+            resize: none;
+            outline: none;
+            height: 50px;
+        }
+
+    .btn-send {
+        background: #E91E63;
+        border: none;
+        color: white;
+        width: 50px;
+        height: 50px;
+        border-radius: 15px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-send:hover {
+            transform: scale(1.05);
+        }
+
+    /* Кнопки */
+    .btn-pay-now {
+        width: 100%;
+        margin-top: 20px;
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 16px;
+        border-radius: 18px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .btn-download {
+        background: rgba(255,255,255,0.05);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+
+    .badge-status {
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+        display: inline-block;
+    }
+
+        .badge-status.waitingforpayment {
+            background: #FFC107;
+            color: black;
+        }
+
+        .badge-status.inprogress {
+            background: #00bcd4;
+            color: white;
+        }
+</style>
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    private HubConnection? hubConnection;
+    private List<ChatMessage> chatMessages = new();
+    private string newMessage = "";
+    private OrderDetailViewModel? order;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    // 1. Этот метод срабатывает ПРИ КАЖДОЙ смене ID в адресной строке
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OrderId != Guid.Empty)
+        {
+            await LoadOrderData();
+        }
+    }
+
+    // 2. Вынесли загрузку данных в отдельный метод, чтобы вызывать его отовсюду
+    private async Task LoadOrderData()
+    {
+        try
+        {
+            // Загружаем инфо о заказе
+            order = await Http.GetFromJsonAsync<OrderDetailViewModel>($"{BaseApiUrl}/api/orders/{OrderId}");
+
+            // Загружаем историю сообщений из базы
+            var history = await Http.GetFromJsonAsync<List<Message>>($"{BaseApiUrl}/api/messages/order/{OrderId}");
+
+            if (history != null)
+            {
+                chatMessages = history.Select(m => new ChatMessage
+                    {
+                    // Определяем имя: если ID отправителя мой — пишу моё имя, иначе — "Партнер"
+                        User = (m.SenderId == Auth.User?.Id) ? Auth.User.Username : (order?.EngineerName ?? "Партнер"),
+                        Text = m.Content
+                    }).ToList();
+            }
+
+            // Если SignalR уже подключен, заходим в комнату нового заказа
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                await hubConnection.SendAsync("JoinOrderGroup", OrderId.ToString());
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных заказа: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Настраиваем SignalR один раз при открытии страницы
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(BaseApiUrl + "/chathub")
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            // Добавляем сообщение в список, только если оно НЕ от нас (наши мы добавляем сами в SendMessage)
+            if (user != Auth.User?.Username)
+            {
+                chatMessages.Add(new ChatMessage { User = user, Text = message });
+                StateHasChanged();
+            }
+        });
+
+        await hubConnection.StartAsync();
+
+        // Первичная загрузка данных уже произойдет в OnParametersSetAsync,
+        // но для надежности можно оставить вызов и тут.
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(newMessage) && hubConnection != null && order != null)
+        {
+            try
+            {
+                // ШАГ 1: Сохраняем в базу данных (чтобы сообщение не пропало после F5)
+                var msgToSave = new Message
+                    {
+                        OrderId = OrderId,
+                        SenderId = Auth.User!.Id,
+                        Content = newMessage,
+                        SentAt = DateTime.UtcNow
+                    };
+                await Http.PostAsJsonAsync($"{BaseApiUrl}/api/messages", msgToSave);
+
+                // ШАГ 2: Транслируем через SignalR (чтобы партнер увидел мгновенно)
+                await hubConnection.SendAsync("SendMessage", OrderId.ToString(), Auth.User!.Username, newMessage);
+
+                // ШАГ 3: Обновляем свой экран
+                chatMessages.Add(new ChatMessage { User = Auth.User.Username, Text = newMessage });
+                newMessage = "";
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка отправки сообщения: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e) { if (e.Key == "Enter") await SendMessage(); }
+
+    private string TranslateStatus(string? s) => s switch
+    {
+        "WaitingForPayment" => "Ожидает оплаты",
+        "InProgress" => "В работе",
+        "Completed" => "Завершен",
+        _ => "Создан"
+    };
+
+    private string GetStepClass(int step)
+    {
+        int current = order?.Status switch
+        {
+            "WaitingForPayment" => 1,
+            "InProgress" => 2,
+            "UnderReview" => 3,
+            "Completed" => 4,
+            _ => 1
+        };
+        return step <= current ? "active" : "";
+    }
+
+    private void GoToPayment()
+    {
+        // Здесь будет логика перехода на оплату ЮKassa
+        Console.WriteLine("Переход к оплате...");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null) await hubConnection.DisposeAsync();
+    }
+
+    public class ChatMessage { public string User { get; set; } = ""; public string Text { get; set; } = ""; }
+
+    public class OrderDetailViewModel
+    {
+        public Guid Id { get; set; }
+        public string Status { get; set; } = "";
+        public decimal TotalAmount { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string EngineerName { get; set; } = "";
+        public string ServiceName { get; set; } = "";
+    }
+}

@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<OrderFile> OrderFiles { get; set; }
     public DbSet<Message> Messages { get; set; }
     public DbSet<Post> Posts { get; set; }
+    public DbSet<PostLike> PostLikes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

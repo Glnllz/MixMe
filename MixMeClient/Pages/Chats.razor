@@ -1,0 +1,244 @@
+﻿@page "/chats"
+@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+@using System.Text.Json.Serialization
+
+<BackgroundGlow />
+
+<div class="chats-page-container fade-in">
+    <div class="chats-card glass-box">
+
+        @* ЛЕВАЯ ЧАСТЬ: СПИСОК ДИАЛОГОВ *@
+        <div class="chats-sidebar">
+            <div class="sidebar-header">
+                <h3>Сообщения</h3>
+            </div>
+
+            <div class="dialogs-list scroll-styled">
+                @if (dialogs == null)
+                {
+                    <div class="p-5 text-center"><div class="spinner-border text-pink"></div></div>
+                }
+                else if (!dialogs.Any())
+                {
+                    <div class="p-4 text-center text-muted">У вас еще нет переписок</div>
+                }
+                else
+                {
+                    @foreach (var d in dialogs)
+                    {
+                        @* ИСПРАВЛЕНО: используем d.Id вместо d.OrderId *@
+                        <div class="dialog-item" @onclick="() => OpenChat(d.Id)">
+                            <div class="d-ava">
+                                @if (!string.IsNullOrEmpty(d.PartnerAvatar))
+                                {
+                                    <img src="@GetFullUrl(d.PartnerAvatar)" />
+                                }
+                                else
+                                {
+                                    <div class="placeholder-mini"><i class="bi bi-person-fill"></i></div>
+                                }
+                            </div>
+                            <div class="d-body">
+                                <div class="d-top">
+                                    <span class="d-name">@d.PartnerName</span>
+                                    @* ИСПРАВЛЕНО: добавили поле LastMessageTime в модель ниже *@
+                                    <span class="d-time">@d.LastMessageTime.ToString("HH:mm")</span>
+                                </div>
+                                <p class="d-last-msg">@d.LastMessage</p>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ПРАВАЯ ЧАСТЬ (ЗАГЛУШКА) *@
+        <div class="chat-main-empty">
+            <div class="empty-content">
+                <i class="bi bi-chat-heart"></i>
+                <h2>Ваши переписки</h2>
+                <p>Выберите чат слева, чтобы обсудить детали проекта или условия оплаты.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Стили делаем такими же, как во всем приложении */
+    .chats-page-container {
+        position: fixed;
+        inset: 100px 5% 40px;
+    }
+
+    .chats-card {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        height: 100%;
+        padding: 0 !important;
+        overflow: hidden;
+        border-radius: 35px;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .chats-sidebar {
+        border-right: 1px solid rgba(255,255,255,0.05);
+        display: flex;
+        flex-direction: column;
+        background: rgba(0,0,0,0.2);
+    }
+
+    .sidebar-header {
+        padding: 30px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+        .sidebar-header h3 {
+            margin: 0;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+
+    .dialogs-list {
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+
+    .dialog-item {
+        display: flex;
+        gap: 15px;
+        padding: 20px 25px;
+        cursor: pointer;
+        transition: 0.2s;
+        border-bottom: 1px solid rgba(255,255,255,0.02);
+    }
+
+        .dialog-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+    .d-ava {
+        width: 55px;
+        height: 55px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #222;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+        .d-ava img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .placeholder-mini {
+        color: #444;
+        font-size: 1.5rem;
+    }
+
+    .d-body {
+        flex-grow: 1;
+        overflow: hidden;
+    }
+
+    .d-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 4px;
+    }
+
+    .d-name {
+        font-weight: 800;
+        color: white;
+        font-size: 1.05rem;
+    }
+
+    .d-time {
+        font-size: 0.75rem;
+        color: rgba(255,255,255,0.3);
+        font-weight: 600;
+    }
+
+    .d-last-msg {
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.4);
+        margin: 0;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    .chat-main-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.01);
+        text-align: center;
+    }
+
+    .empty-content i {
+        font-size: 5rem;
+        color: #E91E63;
+        opacity: 0.2;
+        margin-bottom: 20px;
+        display: block;
+    }
+
+    .empty-content h2 {
+        font-weight: 800;
+        margin-bottom: 10px;
+    }
+
+    .empty-content p {
+        color: rgba(255,255,255,0.3);
+        max-width: 300px;
+        margin: 0 auto;
+    }
+</style>
+
+@code {
+    private List<DialogViewModel>? dialogs;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.User == null) return;
+        // Загружаем те же данные, что и для заказов
+        dialogs = await Http.GetFromJsonAsync<List<DialogViewModel>>($"{BaseApiUrl}/api/orders/user/{Auth.User.Id}");
+    }
+
+    private void OpenChat(Guid id)
+    {
+        // Теперь мы используем просто id
+        if (id == Guid.Empty) return;
+        Nav.NavigateTo($"/order/{id}");
+    }
+
+    private string GetFullUrl(string? u) => string.IsNullOrEmpty(u) ? "" : (u.StartsWith("http") ? u : $"{BaseApiUrl}/{u.TrimStart('/')}");
+
+    public class DialogViewModel
+    {
+        [JsonPropertyName("id")] // СЕРВЕР ПРИШЛЕТ "id", И МЫ ЕГО ПРОЧИТАЕМ
+        public Guid Id { get; set; }
+
+        [JsonPropertyName("partnerName")]
+        public string PartnerName { get; set; } = "";
+
+        [JsonPropertyName("partnerAvatar")]
+        public string? PartnerAvatar { get; set; }
+
+        [JsonPropertyName("lastMessage")]
+        public string LastMessage { get; set; } = "";
+
+        [JsonPropertyName("lastMessageTime")]
+        public DateTime LastMessageTime { get; set; }
+    }
+}

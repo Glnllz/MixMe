@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MixMe.Data;
+using MixMe.Hubs;
 using MixMe.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +29,7 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader());
 });
 
+builder.Services.AddSignalR();
 var app = builder.Build();
 
 // Настройка конвейера запросов (Middleware)
@@ -43,6 +45,8 @@ app.UseStaticFiles(); // <--- ДОБАВЬТЕ ЭТУ СТРОКУ
 
 // Важно: Cors должен идти перед Authorization
 app.UseCors("AllowBlazor");
+
+app.MapHub<ChatHub>("/chathub");
 
 app.UseAuthorization();
 
