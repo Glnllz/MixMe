@@ -1,0 +1,252 @@
+﻿@page "/rank"
+@using MixMeShared
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<BackgroundGlow />
+
+<div class="rank-page">
+    <div class="rank-container fade-in">
+        <header class="rank-header">
+            <div class="trophy-icon"><i class="bi bi-trophy-fill"></i></div>
+            <h1>Зал славы MixMe</h1>
+            <p>Лучшие звукоинженеры по версии сообщества</p>
+        </header>
+
+        <div class="rank-list">
+            @if (allEngineers == null)
+            {
+                <div class="loader-rank"><div class="spinner-premium"></div></div>
+            }
+            else
+            {
+                int position = 1;
+                @foreach (var eng in allEngineers.OrderByDescending(e => e.AvgRating).ThenByDescending(e => e.ExperienceYears))
+                {
+                    <div class="rank-card-modern @(position <= 3 ? $"top-{position}" : "")" @onclick='() => Nav.NavigateTo($"/profile/{eng.ProfileId}")'>
+                        <div class="rank-pos">#@position</div>
+
+                        <div class="rank-avatar-wrapper">
+                            <img src="@GetFullUrl(eng.AvatarUrl)" alt="avatar" />
+                            @if (position == 1)
+                            {
+                                <div class="crown"><i class="bi bi-patch-check-fill"></i></div>
+                            }
+                        </div>
+
+                        <div class="rank-main-info">
+                            <h3>@eng.Username</h3>
+                            <div class="rank-tags">
+                                <span class="tag-exp">@eng.ExperienceYears лет в индустрии</span>
+                                <span class="tag-status">Проверено</span>
+                            </div>
+                        </div>
+
+                        <div class="rank-score-zone">
+                            <div class="score-val">@eng.AvgRating.ToString("F1")</div>
+                            <div class="score-stars">
+                                @for (int i = 0; i < 5; i++)
+                                {
+                                    <i class="bi bi-star-fill @(i < Math.Round(eng.AvgRating) ? "active" : "")"></i>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    position++;
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .rank-page {
+        padding: 120px 20px 60px;
+        min-height: 100vh;
+    }
+
+    .rank-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .rank-header {
+        text-align: center;
+        margin-bottom: 60px;
+    }
+
+    .trophy-icon {
+        font-size: 4rem;
+        color: #FFC107;
+        text-shadow: 0 0 30px rgba(255, 193, 7, 0.4);
+        margin-bottom: 10px;
+    }
+
+    .rank-header h1 {
+        font-size: 3.5rem;
+        font-weight: 900;
+        letter-spacing: -2px;
+    }
+
+    .rank-header p {
+        color: rgba(255,255,255,0.4);
+        font-size: 1.2rem;
+    }
+
+    .rank-card-modern {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 30px;
+        padding: 25px 40px;
+        margin-bottom: 20px;
+        transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+    }
+
+        .rank-card-modern:hover {
+            transform: scale(1.02) translateX(10px);
+            background: rgba(255,255,255,0.05);
+            border-color: #E91E63;
+        }
+
+    .rank-pos {
+        font-size: 2rem;
+        font-weight: 900;
+        color: rgba(255,255,255,0.1);
+        width: 60px;
+    }
+
+    .rank-avatar-wrapper {
+        position: relative;
+        width: 80px;
+        height: 80px;
+    }
+
+        .rank-avatar-wrapper img {
+            width: 100%;
+            height: 100%;
+            border-radius: 22px;
+            object-fit: cover;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+
+    .crown {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        color: #E91E63;
+        font-size: 1.5rem;
+    }
+
+    .rank-main-info {
+        flex-grow: 1;
+    }
+
+        .rank-main-info h3 {
+            margin: 0 0 8px;
+            font-size: 1.6rem;
+            font-weight: 800;
+        }
+
+    .rank-tags {
+        display: flex;
+        gap: 10px;
+    }
+
+    .tag-exp {
+        font-size: 0.8rem;
+        background: rgba(233,30,99,0.1);
+        color: #E91E63;
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-weight: 700;
+    }
+
+    .tag-status {
+        font-size: 0.8rem;
+        background: rgba(255,255,255,0.05);
+        color: rgba(255,255,255,0.4);
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-weight: 700;
+    }
+
+    .rank-score-zone {
+        text-align: right;
+    }
+
+    .score-val {
+        font-size: 2.2rem;
+        font-weight: 900;
+        color: white;
+        line-height: 1;
+    }
+
+    .score-stars {
+        color: rgba(255,255,255,0.1);
+        font-size: 0.8rem;
+        margin-top: 5px;
+    }
+
+        .score-stars .active {
+            color: #FFC107;
+        }
+
+    /* Подсветка ТОП-3 */
+    .top-1 {
+        border-color: rgba(255, 193, 7, 0.3);
+        background: linear-gradient(90deg, rgba(255,193,7,0.05), transparent);
+    }
+
+        .top-1 .rank-pos {
+            color: #FFC107;
+            opacity: 0.5;
+        }
+
+    .top-2 {
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+        .top-2 .rank-pos {
+            color: #e0e0e0;
+            opacity: 0.5;
+        }
+
+    .top-3 {
+        border-color: rgba(205, 127, 50, 0.3);
+    }
+
+        .top-3 .rank-pos {
+            color: #cd7f32;
+            opacity: 0.5;
+        }
+
+    .loader-rank {
+        padding: 100px;
+        text-align: center;
+    }
+</style>
+
+@code {
+    private List<EngineerRankModel>? allEngineers;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    protected override async Task OnInitializedAsync()
+    {
+        allEngineers = await Http.GetFromJsonAsync<List<EngineerRankModel>>($"{BaseApiUrl}/api/engineers/search?sortBy=rating");
+    }
+
+    private string GetFullUrl(string? url) => string.IsNullOrEmpty(url) ? "images/default-avatar.png" : (url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}");
+
+    public class EngineerRankModel
+    {
+        public Guid ProfileId { get; set; }
+        public string Username { get; set; } = "";
+        public string? AvatarUrl { get; set; }
+        public double AvgRating { get; set; }
+        public int ExperienceYears { get; set; }
+    }
+}

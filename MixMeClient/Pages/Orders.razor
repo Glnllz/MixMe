@@ -327,7 +327,7 @@
     protected override async Task OnInitializedAsync()
     {
         if (Auth.User == null) return;
-        orders = await Http.GetFromJsonAsync<List<OrderViewModel>>($"{BaseApiUrl}/api/orders/user/{Auth.User.Id}");
+        orders = await Http.GetFromJsonAsync<List<OrderViewModel>>($"{BaseApiUrl}/api/orders/user/{Auth.User.Id}?requesterId={Auth.User.Id}");
     }
 
     private IEnumerable<OrderViewModel> GetFilteredOrders()

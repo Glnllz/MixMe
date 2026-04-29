@@ -8,47 +8,164 @@
 
 <div class="search-page-layout scroll-styled">
     <div class="search-grid">
+
+        @* --- БОКОВАЯ ПАНЕЛЬ ФИЛЬТРОВ --- *@
         <aside class="filter-sidebar fade-in">
             <div class="glass-box filter-card">
-                <h3 class="filter-title"><i class="bi bi-search-heart me-2"></i> @(Auth.User?.RoleId == 2 ? "Поиск заказов" : "Поиск мастеров")</h3>
+                <h3 class="filter-title">
+                    <i class="bi bi-search-heart me-2"></i>
+                    @(Auth.User?.RoleId == 2 ? "Поиск заказов" : "Поиск мастеров")
+                </h3>
+
+                @* 1. КЛЮЧЕВЫЕ СЛОВА *@
                 <div class="filter-group">
                     <label>Ключевые слова</label>
-                    <div class="search-input-wrapper"><i class="bi bi-search"></i><input type="text" @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleKeyUp" /></div>
+                    <div class="search-input-wrapper">
+                        <i class="bi bi-search"></i>
+                        <input type="text" @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleKeyUp" placeholder="Имя или био..." />
+                    </div>
                 </div>
-                @if (Auth.User?.RoleId == 1) {
-                    <div class="filter-group"><label>Жанр</label><select @bind="selectedGenreId" class="custom-select-pro"><option value="">Все жанры</option>@foreach (var g in allGenres) { <option value="@g.Id">@g.Name</option> }</select></div>
-                    <div class="filter-group"><label>Мин. рейтинг: @minRating ⭐</label><input type="range" min="0" max="5" step="0.5" @bind="minRating" class="pink-slider" /></div>
+
+                @if (Auth.User?.RoleId == 1)
+                {
+                    @* 2. ЖАНР *@
+                    <div class="filter-group">
+                        <label>Жанр</label>
+                        <select @bind="selectedGenreId" class="custom-select-pro">
+                            <option value="">Все жанры</option>
+                            @foreach (var g in allGenres)
+                            {
+                                <option value="@g.Id">@g.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    @* 3. ЦЕНОВОЙ ДИАПАЗОН *@
+                    <div class="filter-group">
+                        <label>Цена (₽)</label>
+                        <div class="d-flex gap-2">
+                            <input type="number" class="custom-input-mini" placeholder="От" @bind="minPrice" />
+                            <input type="number" class="custom-input-mini" placeholder="До" @bind="maxPrice" />
+                        </div>
+                    </div>
+
+                    @* 4. ОПЫТ РАБОТЫ *@
+                    <div class="filter-group">
+                        <label>Мин. опыт (лет): @minExperience</label>
+                        <input type="range" min="0" max="30" @bind="minExperience" class="pink-slider" />
+                    </div>
+
+                    @* 5. РЕЙТИНГ *@
+                    <div class="filter-group">
+                        <label>Мин. рейтинг: @minRating ⭐</label>
+                        <input type="range" min="0" max="5" step="0.5" @bind="minRating" class="pink-slider" />
+                    </div>
+
+                    @* 6. СОРТИРОВКА *@
+                    <div class="filter-group">
+                        <label>Сортировать по</label>
+                        <select @bind="sortBy" class="custom-select-pro">
+                            <option value="rating">Высшему рейтингу</option>
+                            <option value="price_asc">Дешевле сначала</option>
+                            <option value="price_desc">Дороже сначала</option>
+                            <option value="experience">Большому опыту</option>
+                        </select>
+                    </div>
                 }
-                <div class="actions-stack"><button class="btn-search-main" @onclick="LoadData">Найти</button><button class="btn-reset-minimal" @onclick="ResetFilters">Сбросить</button></div>
+
+                <div class="actions-stack">
+                    <button class="btn-search-main" @onclick="LoadData">Найти</button>
+                    <button class="btn-reset-minimal" @onclick="ResetFilters">Сбросить всё</button>
+                </div>
             </div>
         </aside>
 
+        @* --- ОСНОВНАЯ ОБЛАСТЬ РЕЗУЛЬТАТОВ --- *@
         <main class="results-area">
             <h1>@(Auth.User?.RoleId == 2 ? "Доступные проекты" : "Наши специалисты")</h1>
-            @if (results == null) { <div class="search-loader-container"><div class="spinner-border text-pink"></div></div> }
-            else if (results.Count == 0) { <div class="empty-results-box glass-box"><i class="bi bi-search-heart"></i><h3>Ничего не нашли</h3></div> }
-            else {
+
+            @if (results == null)
+            {
+                <div class="search-loader-container">
+                    <div class="spinner-border text-pink"></div>
+                    <p class="mt-3">Поиск по базе данных...</p>
+                </div>
+            }
+            else if (results.Count == 0)
+            {
+                @* НОВАЯ УЛУЧШЕННАЯ ЗАГЛУШКА (EMPTY STATE) *@
+                <div class="empty-results-box glass-box fade-in">
+                    <div class="empty-icon-wrapper">
+                        <i class="bi bi-megaphone"></i>
+                        <div class="pulse-ring"></div>
+                    </div>
+                    <h3>Никого не нашли...</h3>
+                    <p>Попробуйте изменить параметры фильтрации или ключевые слова.</p>
+                    <button class="btn-reset-minimal mt-3" @onclick="ResetFilters">Сбросить фильтры</button>
+                </div>
+            }
+            else
+            {
                 <div class="results-grid">
-                    @foreach (var item in results) {
+                    @foreach (var item in results)
+                    {
                         <div class="result-card glass-box fade-in-up">
                             <div class="card-top" @onclick='() => Nav.NavigateTo($"/profile/{item.ProfileId}")' style="cursor:pointer">
                                 <div class="item-ava">
-                                    @if (!string.IsNullOrEmpty(item.AvatarUrl)) { <img src="@GetFullUrl(item.AvatarUrl)" /> }
-                                    else { <div class="placeholder-ava mini"><i class="bi bi-person-fill"></i></div> }
+                                    @if (!string.IsNullOrEmpty(item.AvatarUrl))
+                                    {
+                                        <img src="@GetFullUrl(item.AvatarUrl)" />
+                                    }
+                                    else
+                                    {
+                                        <div class="placeholder-ava mini"><i class="bi bi-person-fill"></i></div>
+                                    }
                                 </div>
                                 <div class="item-main-info">
                                     <h4>@item.Username</h4>
-                                    @if (Auth.User?.RoleId == 1) { <div class="rating-stars"><span>⭐ @item.AvgRating.ToString("F1")</span></div> }
-                                    else { <span class="role-badge-customer">Заказчик</span> }
+
+                                    @if (Auth.User?.RoleId == 1)
+                                    {
+                                        <div class="rating-stars">
+                                            <span class="text-warning"><i class="bi bi-star-fill"></i> @item.AvgRating.ToString("F1")</span>
+                                            <span class="experience-tag ms-2">
+                                                <i class="bi bi-briefcase-fill me-1"></i> @item.ExperienceYears @GetYearWord(item.ExperienceYears) опыта
+                                            </span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="role-badge-customer">Заказчик MixMe</span>
+                                    }
                                 </div>
-                                @if (Auth.User?.RoleId == 1) { <div class="price-box">от @item.MinPrice.ToString("N0") ₽</div> }
+                                @if (Auth.User?.RoleId == 1)
+                                {
+                                    <div class="price-box">от @item.MinPrice.ToString("N0") ₽</div>
+                                }
                             </div>
+
                             <div class="item-description">@item.Bio</div>
+
                             <div class="card-footer-action">
-                                @if (Auth.User?.RoleId == 1) {
-                                    <button class="btn-action-outline" @onclick="() => OpenOrder(item.ProfileId, item.Username)"><i class="bi bi-cart-plus me-2"></i> Заказать</button>
-                                } else {
-                                    <button class="btn-action-outline" @onclick='() => Nav.NavigateTo($"/profile/{item.ProfileId}")'>Связаться</button>
+                                @if (Auth.User != null && item.ProfileId == Auth.User.Id)
+                                {
+                                    @* Если в поиске выпал я сам *@
+                                    <button class="btn-action-outline" @onclick='() => Nav.NavigateTo("/profile")' style="opacity: 0.6;">
+                                        Мой профиль
+                                    </button>
+                                }
+                                else if (Auth.User?.RoleId == 1)
+                                {
+                                    <button class="btn-action-outline" @onclick="() => OpenOrder(item.ProfileId, item.Username)">
+                                        <i class="bi bi-cart-plus me-2"></i> Заказать услугу
+                                    </button>
+                                }
+                                else if (Auth.User?.RoleId == 2)
+                                {
+                                    <button class="btn-action-outline" @onclick='() => Nav.NavigateTo($"/profile/{item.ProfileId}?action=offer")'
+                                            style="border-color: var(--pink); color: var(--pink);">
+                                        <i class="bi bi-lightning-fill me-2"></i> Предложить услуги
+                                    </button>
                                 }
                             </div>
                         </div>
@@ -144,20 +261,64 @@
                 box-shadow: 0 0 15px var(--pink-soft);
             }
 
+    /* Основное поле выбора */
     .custom-select-pro {
         width: 100%;
-        background: rgba(255,255,255,0.05);
-        border: 1px solid var(--glass-border);
-        border-radius: 14px;
-        padding: 14px;
-        color: white;
-        outline: none;
-        cursor: pointer;
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        /* Кастомная стрелочка (белая) */
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 1.2rem center !important;
+        background-size: 14px auto !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        padding: 14px 18px !important;
+        padding-right: 45px !important; /* место для стрелки */
+
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        appearance: none !important; /* Убирает стандартную стрелку Windows */
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+        outline: none !important;
     }
 
+        /* Эффект при наведении и фокусе */
+        .custom-select-pro:hover {
+            background-color: rgba(255, 255, 255, 0.08) !important;
+            border-color: rgba(233, 30, 99, 0.5) !important;
+        }
+
+        .custom-select-pro:focus {
+            border-color: #E91E63 !important;
+            box-shadow: 0 0 20px rgba(233, 30, 99, 0.2) !important;
+        }
+
+        /* Стилизация выпадающего списка (в некоторых браузерах) */
         .custom-select-pro option {
-            background: #1a1a1a;
-            color: white;
+            background: #1a1a1a !important; /* Темный фон списка */
+            color: white !important;
+            padding: 15px !important;
+        }
+
+    /* Стилизация инпутов с ценой для единообразия */
+    .custom-input-mini {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+        padding: 12px 15px !important;
+        color: white !important;
+        font-weight: 600 !important;
+        outline: none !important;
+        transition: 0.3s !important;
+    }
+
+        .custom-input-mini:focus {
+            border-color: #E91E63 !important;
         }
 
     .pink-slider {
@@ -408,6 +569,46 @@
         color: var(--text-muted);
     }
 
+    .empty-icon-wrapper {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        margin: 0 auto 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-results-box i {
+        font-size: 3rem;
+        color: #E91E63;
+        z-index: 2;
+    }
+
+    .pulse-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border: 2px solid #E91E63;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+        opacity: 0;
+    }
+    @@keyframes pulse {
+        0%
+
+    {
+        transform: scale(0.5);
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
+
+    }
+
     .empty-results-box {
         text-align: center;
         padding: 80px 40px;
@@ -450,6 +651,23 @@
         .scroll-styled::-webkit-scrollbar-thumb:hover {
             background: var(--pink);
         }
+
+    .custom-input-mini {
+        width: 100%;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--glass-border);
+        border-radius: 10px;
+        padding: 10px;
+        color: white;
+        font-size: 0.85rem;
+        outline: none;
+    }
+
+    .experience-badge {
+        font-size: 0.75rem;
+        color: rgba(255,255,255,0.4);
+        margin-top: 4px;
+    }
 </style>
 
 @code {
@@ -460,8 +678,14 @@
     private List<SearchItemViewModel>? results;
     private List<Genre> allGenres = new();
     private string searchQuery = "", BaseApiUrl = "https://localhost:7237";
+
+    // Переменные фильтров
     private int? selectedGenreId;
     private double minRating = 0;
+    private decimal? minPrice;
+    private decimal? maxPrice;
+    private int minExperience = 0;
+    private string sortBy = "rating";
 
     protected override async Task OnInitializedAsync()
     {
@@ -479,23 +703,73 @@
         {
             if (Auth.User?.RoleId == 2)
             {
+                // Поиск для инженеров (ищем посты заказчиков)
                 var data = await Http.GetFromJsonAsync<List<PostSearchModel>>($"{BaseApiUrl}/api/posts/search?query={searchQuery}");
-                results = data?.Select(d => new SearchItemViewModel { ProfileId = d.UserId, Username = d.Username, AvatarUrl = d.AvatarUrl, Bio = d.Content }).ToList();
+                results = data?.Select(d => new SearchItemViewModel
+                    {
+                        ProfileId = d.UserId,
+                        Username = d.Username,
+                        AvatarUrl = d.AvatarUrl,
+                        Bio = d.Content
+                    }).ToList();
             }
             else
             {
-                var url = $"{BaseApiUrl}/api/engineers/search?query={searchQuery}&minRating={minRating}" + (selectedGenreId.HasValue ? $"&genreId={selectedGenreId}" : "");
+                // Поиск для заказчиков (ищем инженеров с фильтрами)
+                var url = $"{BaseApiUrl}/api/engineers/search?query={searchQuery}&minRating={minRating}&sortBy={sortBy}";
+
+                if (selectedGenreId.HasValue) url += $"&genreId={selectedGenreId}";
+                if (minPrice.HasValue) url += $"&minPrice={minPrice}";
+                if (maxPrice.HasValue) url += $"&maxPrice={maxPrice}";
+                if (minExperience > 0) url += $"&minExperience={minExperience}";
+
                 var data = await Http.GetFromJsonAsync<List<EngineerSearchViewModel>>(url);
-                results = data?.Select(d => new SearchItemViewModel { ProfileId = d.ProfileId, Username = d.Username, AvatarUrl = d.AvatarUrl, Bio = d.Bio, AvgRating = d.AvgRating, MinPrice = d.MinPrice }).ToList();
+                results = data?.Select(d => new SearchItemViewModel
+                    {
+                        ProfileId = d.ProfileId,
+                        Username = d.Username,
+                        AvatarUrl = d.AvatarUrl,
+                        Bio = d.Bio,
+                        AvgRating = d.AvgRating,
+                        MinPrice = d.MinPrice,
+                        ExperienceYears = d.ExperienceYears
+                    }).ToList();
             }
         }
         catch { results = new List<SearchItemViewModel>(); }
     }
 
-    private async Task ResetFilters() { searchQuery = ""; selectedGenreId = null; minRating = 0; await LoadData(); }
+    private async Task ResetFilters()
+    {
+        searchQuery = "";
+        selectedGenreId = null;
+        minRating = 0;
+        minPrice = null;
+        maxPrice = null;
+        minExperience = 0;
+        sortBy = "rating";
+        await LoadData();
+    }
+    private string GetYearWord(int years)
+    {
+        if (years % 10 == 1 && years % 100 != 11) return "год";
+        if (years % 10 >= 2 && years % 10 <= 4 && (years % 100 < 10 || years % 100 >= 20)) return "года";
+        return "лет";
+    }
+
     private string GetFullUrl(string? url) => string.IsNullOrEmpty(url) ? "images/default-avatar.png" : (url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}");
 
-    public class SearchItemViewModel { public Guid ProfileId { get; set; } public string Username { get; set; } = ""; public string? AvatarUrl { get; set; } public string Bio { get; set; } = ""; public double AvgRating { get; set; } public decimal MinPrice { get; set; } }
+    public class SearchItemViewModel
+    {
+        public Guid ProfileId { get; set; }
+        public string Username { get; set; } = "";
+        public string? AvatarUrl { get; set; }
+        public string Bio { get; set; } = "";
+        public double AvgRating { get; set; }
+        public decimal MinPrice { get; set; }
+        public int ExperienceYears { get; set; }
+    }
+
     public class PostSearchModel { public Guid UserId { get; set; } public string Username { get; set; } = ""; public string? AvatarUrl { get; set; } public string Content { get; set; } = ""; }
-    public class EngineerSearchViewModel { public Guid ProfileId { get; set; } public string Username { get; set; } = ""; public string? AvatarUrl { get; set; } public string Bio { get; set; } = ""; public double AvgRating { get; set; } public decimal MinPrice { get; set; } }
+    public class EngineerSearchViewModel { public Guid ProfileId { get; set; } public string Username { get; set; } = ""; public string? AvatarUrl { get; set; } public string Bio { get; set; } = ""; public double AvgRating { get; set; } public decimal MinPrice { get; set; } public int ExperienceYears { get; set; } }
 }

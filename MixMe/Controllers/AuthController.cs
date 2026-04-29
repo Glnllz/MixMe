@@ -19,12 +19,14 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<UserProfile>> Login([FromBody] LoginDto loginDto)
     {
+        // Сначала ищем пользователя по Email
         var user = await _context.Profiles
             .Include(p => p.Role)
-            .FirstOrDefaultAsync(u => u.Email == loginDto.Email && u.Password == loginDto.Password);
+            .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-        if (user == null) return Unauthorized("Неверный email или пароль");
-
+        // Проверяем хэш
+        if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
+            return Unauthorized("Неверный email или пароль");
         return Ok(user);
     }
 
@@ -43,7 +45,7 @@ public class AuthController : ControllerBase
         {
             Username = dto.Username,
             Email = dto.Email,
-            Password = dto.Password, // В реальном проекте тут должен быть хэш!
+            Password = BCrypt.Net.BCrypt.HashPassword(dto.Password), // В реальном проекте тут должен быть хэш!
             FullName = dto.FullName,
             RoleId = role?.Id ?? 1
         };

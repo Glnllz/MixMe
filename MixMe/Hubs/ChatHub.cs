@@ -13,6 +13,7 @@ public class ChatHub : Hub
     // Отправка сообщения участникам заказа
     public async Task SendMessage(string orderId, string user, string message)
     {
-        await Clients.Group(orderId).SendAsync("ReceiveMessage", user, message);
+        // Теперь мы отправляем ТРИ параметра: orderId, имя и текст
+        await Clients.Group(orderId).SendAsync("ReceiveMessage", orderId, user, message);
     }
 }

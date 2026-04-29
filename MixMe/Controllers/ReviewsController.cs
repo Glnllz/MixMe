@@ -3,85 +3,57 @@ using Microsoft.EntityFrameworkCore;
 using MixMe.Data;
 using MixMeShared;
 
-namespace MixMe.Controllers
+[Route("api/[controller]")]
+[ApiController]
+public class ReviewsController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class ReviewsController : ControllerBase
+    private readonly ApplicationDbContext _context;
+    public ReviewsController(ApplicationDbContext context) => _context = context;
+
+    // MixMe/Controllers/ReviewsController.cs
+
+    [HttpPost]
+    public async Task<IActionResult> LeaveReview([FromBody] Review review)
     {
-        private readonly ApplicationDbContext _context;
+        var order = await _context.Orders.FindAsync(review.OrderId);
+        if (order == null || order.Status != "Completed")
+            return BadRequest("Отзыв можно оставить только после завершения заказа.");
 
-        // ВАЖНО: Добавь этот конструктор, чтобы инициализировать _context
-        public ReviewsController(ApplicationDbContext context)
-        {
-            _context = context;
-        }
+        var existing = await _context.Reviews.AnyAsync(r => r.OrderId == review.OrderId);
+        if (existing) return BadRequest("Вы уже оставили отзыв.");
 
-        // Получение отзывов инженера
-        [HttpGet("engineer/{engineerId}")]
-        public async Task<ActionResult<IEnumerable<object>>> GetEngineerReviews(Guid engineerId)
+        // --- НОВАЯ ЛОГИКА: Находим имя заказчика перед сохранением ---
+        var reviewerProfile = await _context.Profiles.FindAsync(review.ReviewerId);
+        review.ReviewerName = reviewerProfile?.Username ?? "Пользователь";
+        // -------------------------------------------------------------
+
+        review.CreatedAt = DateTime.UtcNow;
+        _context.Reviews.Add(review);
+        await _context.SaveChangesAsync();
+
+        // Пересчет рейтинга инженера
+        var engineer = await _context.Engineers.FirstOrDefaultAsync(e => e.ProfileId == review.RevieweeId);
+        if (engineer != null)
         {
-            // Теперь _context не будет null
-            var reviews = await _context.Reviews
-                .Where(r => r.RevieweeId == engineerId)
-                .Select(r => new {
-                    r.Id,
-                    r.Rating,
-                    r.Comment,
-                    r.CreatedAt,
-                    ReviewerName = _context.Profiles
-                        .Where(p => p.Id == r.ReviewerId)
-                        .Select(p => p.Username)
-                        .FirstOrDefault()
-                })
-                .OrderByDescending(r => r.CreatedAt)
+            var allRatings = await _context.Reviews
+                .Where(r => r.RevieweeId == review.RevieweeId)
+                .Select(r => r.Rating)
                 .ToListAsync();
 
-            return Ok(reviews);
-        }
-
-        // Добавление отзыва (только если был заказ)
-        [HttpPost]
-        public async Task<IActionResult> LeaveReview([FromBody] Review review)
-        {
-            // 1. Ищем завершенный заказ этого пользователя у этого инженера
-            // (ServiceId или OrderId должен быть в модели Review)
-            var hasCompletedOrder = await _context.Orders
-                .AnyAsync(o => o.CustomerId == review.ReviewerId &&
-                               o.EngineerId == review.RevieweeId &&
-                               o.Status == "Completed"); // Или тот статус, который у тебя означает финал
-
-            if (!hasCompletedOrder)
-            {
-                return BadRequest("Вы не можете оставить отзыв, так как у вас нет завершенных заказов у этого специалиста.");
-            }
-
-            // 2. Проверяем, не оставлял ли он уже отзыв (чтобы не спамить)
-            var alreadyReviewed = await _context.Reviews
-                .AnyAsync(r => r.ReviewerId == review.ReviewerId && r.OrderId == review.OrderId);
-
-            if (alreadyReviewed)
-            {
-                return BadRequest("Вы уже оставили отзыв для этого заказа.");
-            }
-
-            _context.Reviews.Add(review);
+            engineer.AvgRating = allRatings.Average();
             await _context.SaveChangesAsync();
-
-            // 3. Обновляем средний рейтинг инженера
-            var engineer = await _context.Engineers.FindAsync(review.RevieweeId);
-            if (engineer != null)
-            {
-                var ratings = await _context.Reviews
-                    .Where(r => r.RevieweeId == review.RevieweeId)
-                    .Select(r => r.Rating)
-                    .ToListAsync();
-
-                engineer.AvgRating = ratings.Average();
-                await _context.SaveChangesAsync();
-            }
-
-            return Ok();
         }
+
+        return Ok();
+    }
+
+    [HttpGet("engineer/{engineerId}")]
+    public async Task<ActionResult<IEnumerable<Review>>> GetEngineerReviews(Guid engineerId)
+    {
+        // Теперь метод стал очень простым, так как имя уже в таблице
+        return await _context.Reviews
+            .Where(r => r.RevieweeId == engineerId)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
     }
 }

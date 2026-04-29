@@ -67,56 +67,102 @@
 </div>
 
 <style>
-    /* Стили делаем такими же, как во всем приложении */
+    /* ОСНОВНОЙ КОНТЕЙНЕР */
     .chats-page-container {
         position: fixed;
-        inset: 100px 5% 40px;
+        /* Фиксируем отступы сверху, слева/справа и снизу */
+        top: 100px;
+        left: 5%;
+        right: 5%;
+        bottom: 40px;
+        z-index: 10;
     }
 
     .chats-card {
         display: grid;
         grid-template-columns: 380px 1fr;
-        height: 100%;
+        height: 100%; /* Занимает всю высоту контейнера */
         padding: 0 !important;
         overflow: hidden;
         border-radius: 35px;
         border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(15, 15, 15, 0.95);
+        backdrop-filter: blur(50px);
+        box-shadow: 0 50px 100px rgba(0,0,0,0.5);
     }
 
+    /* ЛЕВАЯ ПАНЕЛЬ С ДИАЛОГАМИ */
     .chats-sidebar {
         border-right: 1px solid rgba(255,255,255,0.05);
         display: flex;
         flex-direction: column;
         background: rgba(0,0,0,0.2);
+        height: 100%; /* Важно для ограничения высоты */
+        overflow: hidden; /* Чтобы ничего не вылетало за границы */
     }
 
     .sidebar-header {
         padding: 30px;
         border-bottom: 1px solid rgba(255,255,255,0.05);
+        flex-shrink: 0; /* Шапка не сжимается */
     }
 
         .sidebar-header h3 {
             margin: 0;
             font-weight: 900;
             letter-spacing: -1px;
+            color: white;
         }
 
+    /* ОБЛАСТЬ СКРОЛЛА (СПИСОК) */
     .dialogs-list {
-        flex-grow: 1;
-        overflow-y: auto;
+        flex: 1 1 auto; /* Занимает всё свободное место */
+        overflow-y: auto; /* ВКЛЮЧАЕТ СКРОЛЛ */
+        min-height: 0; /* КРИТИЧЕСКИ ВАЖНО для Flexbox, чтобы появился скролл */
+        display: block;
     }
 
+    /* --- РОЗОВЫЙ СКРОЛЛБАР (Webkit) --- */
+    /* Делаем его чуть шире и ярче, чтобы точно было видно */
+    .scroll-styled::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .scroll-styled::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 0;
+    }
+
+    .scroll-styled::-webkit-scrollbar-thumb {
+        background: #E91E63; /* Яркий розовый */
+        border-radius: 10px;
+        border: 2px solid #111; /* Отступ внутри полосы */
+        background-clip: padding-box;
+    }
+
+        .scroll-styled::-webkit-scrollbar-thumb:hover {
+            background: #ff2e75;
+            box-shadow: 0 0 10px rgba(233, 30, 99, 0.8);
+        }
+
+    /* Для Firefox */
+    .scroll-styled {
+        scrollbar-width: thin;
+        scrollbar-color: #E91E63 rgba(0, 0, 0, 0.3);
+    }
+
+    /* ЭЛЕМЕНТЫ СПИСКА */
     .dialog-item {
         display: flex;
         gap: 15px;
         padding: 20px 25px;
         cursor: pointer;
         transition: 0.2s;
-        border-bottom: 1px solid rgba(255,255,255,0.02);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
     }
 
         .dialog-item:hover {
-            background: rgba(255,255,255,0.05);
+            background: rgba(233, 30, 99, 0.05);
         }
 
     .d-ava {
@@ -169,18 +215,19 @@
 
     .d-last-msg {
         font-size: 0.9rem;
-        color: rgba(255,255,255,0.4);
+        color: rgba(255,255,255,0.5);
         margin: 0;
         white-space: nowrap;
         text-overflow: ellipsis;
         overflow: hidden;
     }
 
+    /* ПРАВАЯ ПАНЕЛЬ */
     .chat-main-empty {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255,255,255,0.01);
+        background: rgba(0,0,0,0.1);
         text-align: center;
     }
 
@@ -193,8 +240,9 @@
     }
 
     .empty-content h2 {
-        font-weight: 800;
+        font-weight: 900;
         margin-bottom: 10px;
+        color: white;
     }
 
     .empty-content p {
@@ -212,7 +260,7 @@
     {
         if (Auth.User == null) return;
         // Загружаем те же данные, что и для заказов
-        dialogs = await Http.GetFromJsonAsync<List<DialogViewModel>>($"{BaseApiUrl}/api/orders/user/{Auth.User.Id}");
+        dialogs = await Http.GetFromJsonAsync<List<DialogViewModel>>($"{BaseApiUrl}/api/orders/user/{Auth.User.Id}?requesterId={Auth.User.Id}");
     }
 
     private void OpenChat(Guid id)

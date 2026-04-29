@@ -7,56 +7,68 @@
 <BackgroundGlow />
 
 <div class="auth-scroll-wrapper">
-<div class="auth-container fade-in">
-    <div class="glass-card auth-card">
-        <img src="images/logo.png" class="auth-logo-small" alt="MixMe" />
-        <h2 class="auth-title">Регистрация</h2>
-        <p class="auth-subtitle">Создайте профиль @(RoleType == "engineer" ? "инженера" : "заказчика")</p>
+    <div class="auth-container fade-in">
+        <div class="glass-card auth-card">
+            <img src="images/logo.png" class="auth-logo-small" alt="MixMe" />
+            <h2 class="auth-title">Регистрация</h2>
+            <p class="auth-subtitle">Создайте профиль @(RoleType == "engineer" ? "инженера" : "заказчика")</p>
 
-        <div class="input-stack">
-            <div class="input-group-custom">
-                <i class="bi bi-person"></i>
-                <input type="text" placeholder="Имя пользователя" @bind="regModel.Username" />
+            @* ИСПОЛЬЗУЕМ СТАНДАРТ BLAZOR *@
+            <EditForm Model="@regModel" OnValidSubmit="HandleRegister">
+                <DataAnnotationsValidator />
+
+                <div class="input-stack">
+                    <div class="input-group-custom">
+                        <i class="bi bi-person"></i>
+                        <InputText placeholder="Имя пользователя" @bind-Value="regModel.Username" />
+                    </div>
+                    <ValidationMessage For="@(() => regModel.Username)" class="error-small" />
+
+                    <div class="input-group-custom">
+                        <i class="bi bi-envelope"></i>
+                        <InputText type="email" placeholder="Email" @bind-Value="regModel.Email" />
+                    </div>
+                    <ValidationMessage For="@(() => regModel.Email)" class="error-small" />
+
+                    <div class="input-group-custom">
+                        <i class="bi bi-lock"></i>
+                        <InputText type="password" placeholder="Пароль" @bind-Value="regModel.Password" />
+                    </div>
+                    <ValidationMessage For="@(() => regModel.Password)" class="error-small" />
+
+                    <div class="input-group-custom">
+                        <i class="bi bi-shield-lock"></i>
+                        <input type="password" placeholder="Повторите пароль" @bind="confirmPassword" />
+                    </div>
+                    @if (regModel.Password != confirmPassword && !string.IsNullOrEmpty(confirmPassword))
+                    {
+                        <span class="error-small">Пароли не совпадают</span>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <p class="error-text">@errorMessage</p>
+                }
+
+                <button type="submit" class="btn-pink main-auth-btn" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                    }
+                    else
+                    {
+                        <span>Создать аккаунт</span>
+                    }
+                </button>
+            </EditForm>
+
+            <div class="auth-footer">
+                <span class="footer-question">Уже есть аккаунт?</span>
+                <a href="/login" class="link-pink">Войти</a>
             </div>
-            
-            <div class="input-group-custom">
-                <i class="bi bi-envelope"></i>
-                <input type="email" placeholder="Email" @bind="regModel.Email" />
-            </div>
-
-            <div class="input-group-custom">
-                <i class="bi bi-lock"></i>
-                <input type="password" placeholder="Пароль" @bind="regModel.Password" />
-            </div>
-
-            <div class="input-group-custom">
-                <i class="bi bi-shield-lock"></i>
-                <input type="password" placeholder="Повторите пароль" @bind="confirmPassword" />
-            </div>
-        </div>
-
-        @if (!string.IsNullOrEmpty(errorMessage))
-        {
-            <p class="error-text">@errorMessage</p>
-        }
-
-        <button class="btn-pink main-auth-btn" @onclick="HandleRegister" disabled="@isLoading">
-            @if (isLoading)
-            {
-                <span class="spinner-border spinner-border-sm"></span>
-            }
-            else
-            {
-                <span>Создать аккаунт</span>
-            }
-        </button>
-
-        <div class="auth-footer">
-            <span class="footer-question">Уже есть аккаунт?</span>
-            <a href="/login" class="link-pink">Войти</a>
         </div>
     </div>
-</div>
 </div>
 
 <style>
@@ -69,6 +81,16 @@
         z-index: 5;
     }
 
+    .error-small {
+        color: #ff5252;
+        font-size: 0.75rem;
+        display: block;
+        text-align: left;
+        margin-top: -10px;
+        margin-bottom: 10px;
+        padding-left: 10px;
+        font-weight: 600;
+    }
     .auth-container {
         display: flex;
         justify-content: center;
@@ -242,36 +264,16 @@
 
     private async Task HandleRegister()
     {
-        errorMessage = null;
+        // Сюда мы попадем ТОЛЬКО если все поля прошли валидацию DataAnnotations
 
-        // 1. Валидация Имени пользователя
-        if (string.IsNullOrWhiteSpace(regModel.Username) || regModel.Username.Length < 3)
-        {
-            errorMessage = "Имя пользователя должно быть не короче 3 символов";
-            return;
-        }
-
-        // 2. Валидация Email
-        if (string.IsNullOrWhiteSpace(regModel.Email) || !regModel.Email.Contains("@"))
-        {
-            errorMessage = "Введите корректный адрес электронной почты";
-            return;
-        }
-
-        // 3. Валидация Пароля
-        if (string.IsNullOrWhiteSpace(regModel.Password) || regModel.Password.Length < 6)
-        {
-            errorMessage = "Пароль должен содержать минимум 6 символов";
-            return;
-        }
-
-        // 4. Совпадение паролей
+        // Единственная ручная проверка, которую сложно сделать атрибутом — совпадение паролей
         if (regModel.Password != confirmPassword)
         {
             errorMessage = "Пароли не совпадают";
             return;
         }
 
+        errorMessage = null;
         isLoading = true;
         regModel.Role = RoleType;
 
@@ -284,7 +286,6 @@
             }
             else
             {
-                // Сервер может вернуть ошибку, если Email уже занят
                 errorMessage = await response.Content.ReadAsStringAsync();
             }
         }

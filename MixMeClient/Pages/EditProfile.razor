@@ -739,13 +739,55 @@
         if (user == null) return;
         serverErrorMessage = null;
 
+        // --- БЛОК ВАЛИДАЦИИ ---
+
+        // 1. Проверка имени пользователя
+        if (string.IsNullOrWhiteSpace(user.Username) || user.Username.Length < 3)
+        {
+            serverErrorMessage = "Имя пользователя должно быть не менее 3 символов.";
+            return;
+        }
+
+        // 2. Проверка Email (хотя поле может быть заблокировано, проверка важна для безопасности)
+        if (string.IsNullOrWhiteSpace(user.Email) || !user.Email.Contains("@"))
+        {
+            serverErrorMessage = "Введите корректный адрес электронной почты.";
+            return;
+        }
+
+        // 3. Проверка специфичных полей для инженера (RoleId == 2)
+        if (user.RoleId == 2)
+        {
+            if (engineerDto.ExperienceYears < 0)
+            {
+                serverErrorMessage = "Опыт работы не может быть отрицательным числом.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(engineerDto.Bio))
+            {
+                serverErrorMessage = "Пожалуйста, заполните биографию специалиста.";
+                return;
+            }
+        }
+
+        // 4. Проверка смены пароля
         if (!string.IsNullOrEmpty(newPassword))
         {
-            if (newPassword != confirmPassword) { serverErrorMessage = "Пароли не совпадают!"; return; }
-            if (newPassword.Length < 6) { serverErrorMessage = "Пароль должен быть не менее 6 символов."; return; }
+            if (newPassword != confirmPassword)
+            {
+                serverErrorMessage = "Пароли не совпадают!";
+                return;
+            }
+            if (newPassword.Length < 6)
+            {
+                serverErrorMessage = "Новый пароль должен содержать не менее 6 символов.";
+                return;
+            }
             user.Password = newPassword;
         }
 
+        // --- ПРОЦЕСС СОХРАНЕНИЯ ---
         isSaving = true;
         try
         {
@@ -753,20 +795,33 @@
             if (response.IsSuccessStatusCode)
             {
                 if (user.RoleId == 2)
-                    await Http.PutAsJsonAsync($"{BaseApiUrl}/api/engineers/{user.Id}", engineerDto);
+                {
+                    var engineerResponse = await Http.PutAsJsonAsync($"{BaseApiUrl}/api/engineers/{user.Id}", engineerDto);
+                    if (!engineerResponse.IsSuccessStatusCode)
+                    {
+                        serverErrorMessage = "Основной профиль обновлен, но возникла ошибка при сохранении данных инженера.";
+                        return;
+                    }
+                }
 
                 Nav.NavigateTo("/profile");
             }
             else
             {
-                serverErrorMessage = "Ошибка при сохранении данных.";
+                // Пытаемся получить текст ошибки от сервера, если он есть
+                var errorContent = await response.Content.ReadAsStringAsync();
+                serverErrorMessage = !string.IsNullOrEmpty(errorContent) ? errorContent : "Ошибка при сохранении данных на сервере.";
             }
         }
         catch (Exception ex)
         {
-            serverErrorMessage = "Сетевая ошибка. Попробуйте позже.";
+            Console.WriteLine($"Error saving profile: {ex.Message}");
+            serverErrorMessage = "Сетевая ошибка. Убедитесь, что сервер доступен, и попробуйте позже.";
         }
-        finally { isSaving = false; }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     public class UploadResult { public string Url { get; set; } = ""; }

@@ -1,10 +1,11 @@
 ﻿@inherits LayoutComponentBase
 @inject NavigationManager Nav
 @inject MixMeClient.Services.AuthService Auth
-@implements IDisposable
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client
 
 <div class="app-wrapper">
-    @* Фон с «живыми» пятнами (всегда на фоне) *@
+    @* Фон с «живыми» пятнами *@
     <div class="bg-visual">
         <div class="glow-1"></div>
         <div class="glow-2"></div>
@@ -22,8 +23,8 @@
 
                 <nav class="links">
                     <NavLink href="/feed" ActiveClass="active">Лента</NavLink>
-                    @* Называем просто Поиск, чтобы не путаться *@
                     <NavLink href="/search" ActiveClass="active">Поиск</NavLink>
+                    <NavLink href="/rank" ActiveClass="active">Рейтинг</NavLink>
                     <NavLink href="/orders" ActiveClass="active">Мои проекты</NavLink>
                     <NavLink href="/chats" ActiveClass="active">Сообщения</NavLink>
                 </nav>
@@ -53,11 +54,24 @@
         </header>
     }
 
-    @* Контентная область с динамическим отступом *@
+    @* Контентная область *@
     <main class="content-area @(ShowNavigation() ? "with-nav" : "full-screen")">
         @Body
     </main>
 </div>
+
+@* ГЛОБАЛЬНОЕ УВЕДОМЛЕНИЕ (TOAST) *@
+@if (!string.IsNullOrEmpty(lastNotification))
+{
+    <div class="global-toast animate__animated animate__fadeInRight" @onclick="GoToNotification">
+        <div class="toast-icon"><i class="bi bi-chat-fill"></i></div>
+        <div class="toast-body">
+            <span class="toast-title">Новое сообщение</span>
+            <p>@lastNotification</p>
+        </div>
+        <button class="toast-close" @onclick:stopPropagation @onclick="() => lastNotification = null">&times;</button>
+    </div>
+}
 
 <style>
     :root {
@@ -174,7 +188,6 @@
         font-size: 1.1rem;
     }
 
-    /* Контейнер аватара */
     .profile-avatar-container {
         width: 42px;
         height: 42px;
@@ -207,7 +220,6 @@
             color: white;
         }
 
-    /* Контентные классы */
     .content-area {
         position: relative;
         z-index: 1;
@@ -225,7 +237,79 @@
             padding-top: 0;
         }
 
-    /* Анимации */
+    /* --- СТИЛИ УВЕДОМЛЕНИЯ (TOAST) --- */
+    .global-toast {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background: rgba(20, 20, 20, 0.95);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--accent);
+        border-radius: 22px;
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 9999;
+        cursor: pointer;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 20px rgba(233, 30, 99, 0.2);
+        max-width: 380px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+        .global-toast:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: #151515;
+        }
+
+    .toast-icon {
+        width: 48px;
+        height: 48px;
+        background: var(--accent);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+        box-shadow: 0 8px 15px rgba(233, 30, 99, 0.3);
+    }
+
+    .toast-title {
+        display: block;
+        font-weight: 900;
+        font-size: 0.75rem;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 2px;
+    }
+
+    .toast-body p {
+        margin: 0;
+        font-size: 0.95rem;
+        color: rgba(255,255,255,0.9);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }
+
+    .toast-close {
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.2);
+        font-size: 1.8rem;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        transition: 0.2s;
+    }
+
+        .toast-close:hover {
+            color: white;
+        }
+
     .fade-in-down {
         animation: fadeInDown 0.5s ease forwards;
     }
@@ -245,10 +329,69 @@
 
 @code {
     private string BaseApiUrl = "https://localhost:7237";
+    private HubConnection? hubConnection;
+    private string? lastNotification;
+    private string? lastNotificationOrderId;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += HandleLocationChanged;
+
+        // Если пользователь уже вошел в систему при загрузке страницы
+        if (Auth.IsLoggedIn)
+        {
+            await StartGlobalNotificationHub();
+        }
+    }
+
+    private async Task StartGlobalNotificationHub()
+    {
+        try
+        {
+            if (hubConnection != null) return; // Чтобы не плодить подключения
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(BaseApiUrl + "/chathub")
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Принимаем 3 параметра: OrderId, Имя пользователя, Текст сообщения
+            hubConnection.On<string, string, string>("ReceiveMessage", (orderId, user, message) =>
+            {
+                // Проверяем, не находимся ли мы уже в этом чате
+                bool isCurrentlyInThisOrder = Nav.Uri.Contains($"/order/{orderId}");
+                bool isMessageFromMe = user == Auth.User?.Username;
+
+                if (!isCurrentlyInThisOrder && !isMessageFromMe)
+                {
+                    lastNotification = $"{user}: {message}";
+                    lastNotificationOrderId = orderId;
+                    InvokeAsync(StateHasChanged);
+
+                    // Авто-скрытие уведомления через 6 секунд
+                    _ = Task.Delay(6000).ContinueWith(_ =>
+                    {
+                        lastNotification = null;
+                        InvokeAsync(StateHasChanged);
+                    });
+                }
+            });
+
+            await hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR Global Hub Error: {ex.Message}");
+        }
+    }
+
+    private void GoToNotification()
+    {
+        if (!string.IsNullOrEmpty(lastNotificationOrderId))
+        {
+            Nav.NavigateTo($"/order/{lastNotificationOrderId}");
+            lastNotification = null;
+        }
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -260,8 +403,6 @@
     {
         var relativeUri = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
         var pathOnly = relativeUri.Split('?')[0];
-
-        // Скрываем навигацию на лендинге, страницах логина и регистрации
         return !(string.IsNullOrEmpty(pathOnly) || pathOnly.Contains("login") || pathOnly.Contains("register"));
     }
 
@@ -271,8 +412,12 @@
         return url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}";
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         Nav.LocationChanged -= HandleLocationChanged;
+        if (hubConnection != null)
+        {
+            await hubConnection.DisposeAsync();
+        }
     }
 }

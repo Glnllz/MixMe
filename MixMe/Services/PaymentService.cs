@@ -1,6 +1,6 @@
 ﻿using Yandex.Checkout.V3;
 using MixMeShared;
-using System.Net.Http; // Не забудьте
+using System.Net.Http;
 
 namespace MixMe.Services;
 
@@ -29,15 +29,21 @@ public class PaymentService
         var newPayment = new NewPayment
         {
             Amount = new Amount { Value = order.TotalAmount, Currency = "RUB" },
-            Confirmation = new Confirmation // Используем базовый класс
+            Confirmation = new Confirmation
             {
                 Type = ConfirmationType.Redirect,
                 ReturnUrl = returnUrl
             },
             Description = $"Оплата заказа MixMe №{order.Id}",
-            Capture = false // Обычно для магазинов лучше сразу Capture = true
+            Capture = true // ИСПРАВЛЕНО: Устанавливаем true, чтобы платеж подтверждался автоматически сразу после ввода кода
         };
 
         return await _client.CreatePaymentAsync(newPayment);
+    }
+
+    public async Task<Payment> GetPaymentStatus(string paymentId)
+    {
+        // Запрашиваем данные о платеже у ЮKassa по его идентификатору
+        return await _client.GetPaymentAsync(paymentId);
     }
 }

@@ -18,15 +18,24 @@ public class EngineersController : ControllerBase
 
     // Получить данные инженера по его ProfileId
     [HttpGet("{profileId}")]
-    public async Task<ActionResult<Engineer>> GetEngineer(Guid profileId)
+    public async Task<ActionResult<object>> GetEngineer(Guid profileId)
     {
         var engineer = await _context.Engineers
-            .Include(e => e.Genres) // Загружаем связанные жанры
-            .Include(e => e.Profile) // Загружаем данные из таблицы Profiles
+            .Include(e => e.Genres)
+            .Include(e => e.Profile)
             .FirstOrDefaultAsync(e => e.ProfileId == profileId);
 
         if (engineer == null) return NotFound();
-        return Ok(engineer);
+
+        // Считаем количество выполненных заказов
+        var completedCount = await _context.Orders
+            .CountAsync(o => o.EngineerId == profileId && o.Status == "Completed");
+
+        return Ok(new
+        {
+            Data = engineer,
+            CompletedOrdersCount = completedCount
+        });
     }
 
     // Обновить Bio, опыт и ЖАНРЫ
@@ -75,62 +84,53 @@ public class EngineersController : ControllerBase
     [FromQuery] string? query,
     [FromQuery] int? genreId,
     [FromQuery] decimal? minPrice,
-    [FromQuery] double? minRating)
+    [FromQuery] decimal? maxPrice, // Добавили макс. цену
+    [FromQuery] int? minExperience, // Добавили опыт
+    [FromQuery] string? sortBy = "rating") // Сортировка: rating, price_asc, price_desc, experience
     {
         var engineersQuery = _context.Engineers
             .Include(e => e.Profile)
             .Include(e => e.Genres)
             .AsQueryable();
 
-        // Фильтр по имени/биографии
-        if (!string.IsNullOrEmpty(query))
-        {
-            engineersQuery = engineersQuery.Where(e =>
-                e.Profile.Username.Contains(query) ||
-                e.Bio.Contains(query));
-        }
-
-        // Фильтр по жанру
-        if (genreId.HasValue)
-        {
-            engineersQuery = engineersQuery.Where(e => e.Genres.Any(g => g.Id == genreId));
-        }
-
-        // Фильтр по рейтингу
-        if (minRating.HasValue)
-        {
-            engineersQuery = engineersQuery.Where(e => e.AvgRating >= minRating.Value);
-        }
+        // Фильтры
+        if (!string.IsNullOrEmpty(query)) engineersQuery = engineersQuery.Where(e => e.Profile.Username.Contains(query) || e.Bio.Contains(query));
+        if (genreId.HasValue) engineersQuery = engineersQuery.Where(e => e.Genres.Any(g => g.Id == genreId));
+        if (minExperience.HasValue) engineersQuery = engineersQuery.Where(e => e.ExperienceYears >= minExperience.Value);
 
         var engineers = await engineersQuery.ToListAsync();
+        var result = new List<dynamic>();
 
-        // Формируем результат с минимальной ценой из прайс-листа
-        var result = new List<object>();
         foreach (var e in engineers)
         {
-            // Ищем минимальную цену услуг этого инженера
             var minServicePrice = await _context.Services
                 .Where(s => s.EngineerId == e.ProfileId)
                 .OrderBy(s => s.Price)
                 .Select(s => s.Price)
                 .FirstOrDefaultAsync();
 
-            // Если цена не задана фильтром или проходит по нему
             if (minPrice.HasValue && minServicePrice < minPrice.Value) continue;
+            if (maxPrice.HasValue && minServicePrice > maxPrice.Value) continue;
 
             result.Add(new
             {
                 e.ProfileId,
-                Username = e.Profile.Username,
-                AvatarUrl = e.Profile.AvatarUrl,
+                e.Profile.Username,
+                e.Profile.AvatarUrl,
                 e.Bio,
                 e.AvgRating,
                 e.ExperienceYears,
-                Genres = e.Genres.Select(g => g.Name).ToList(),
                 MinPrice = minServicePrice
             });
         }
 
-        return Ok(result);
+        // Сортировка в памяти (так как MinPrice вычисляемое)
+        return sortBy switch
+        {
+            "price_asc" => Ok(result.OrderBy(r => r.MinPrice)),
+            "price_desc" => Ok(result.OrderByDescending(r => r.MinPrice)),
+            "experience" => Ok(result.OrderByDescending(r => r.ExperienceYears)),
+            _ => Ok(result.OrderByDescending(r => r.AvgRating))
+        };
     }
 }

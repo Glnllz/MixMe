@@ -3,6 +3,7 @@
 @using MixMeShared
 @using System.Net.Http.Json
 @using System.Globalization
+@using static MixMeClient.Pages.Orders
 @inject HttpClient Http
 @inject MixMeClient.Services.AuthService Auth
 @inject NavigationManager Nav
@@ -77,12 +78,22 @@
                                     <span class="stat-value">@(portfolioItems?.Count ?? 0)</span>
                                     <span class="stat-label">Работ</span>
                                 </div>
+
+                                @* НОВЫЙ БЛОК СТАТИСТИКИ *@
+                                <div class="stat-item">
+                                    <span class="stat-value">@completedOrdersCount</span>
+                                    <span class="stat-label">Заказов</span>
+                                </div>
+
                                 <div class="stat-item">
                                     <span class="stat-value">@(engineerData?.ExperienceYears ?? 0)</span>
                                     <span class="stat-label">Лет опыта</span>
                                 </div>
+
                                 <div class="stat-item rating">
-                                    <span class="stat-value"><i class="bi bi-star-fill"></i> @(engineerData?.AvgRating.ToString("F1") ?? "0.0")</span>
+                                    <span class="stat-value">
+                                        <i class="bi bi-star-fill"></i> @(engineerData?.AvgRating.ToString("F1") ?? "0.0")
+                                    </span>
                                     <span class="stat-label">Рейтинг</span>
                                 </div>
                             </div>
@@ -159,8 +170,24 @@
 
                                 <div class="portfolio-card @(isThisActive ? "active-play" : "")">
                                     <div class="card-top">
-                                        <div class="work-meta"><h4>@item.Title</h4><p>@item.Description</p></div>
-                                        @if (isPlaying && isThisActive) { <div class="playing-waves"><span></span><span></span><span></span></div> }
+                                        <div class="work-meta">
+                                            <h4>@item.Title</h4>
+                                            <p>@item.Description</p>
+                                        </div>
+                                        <div class="card-top-right">
+                                            @if (isPlaying && isThisActive)
+                                            {
+                                                <div class="playing-waves"><span></span><span></span><span></span></div>
+                                            }
+
+                                            @* КНОПКА УДАЛЕНИЯ ДЛЯ ВЛАДЕЛЬЦА *@
+                                            @if (isOwnProfile)
+                                            {
+                                                <button class="btn-del-work" @onclick="() => DeleteWork(item.Id)" title="Удалить работу">
+                                                    <i class="bi bi-trash3"></i>
+                                                </button>
+                                            }
+                                        </div>
                                     </div>
                                     <div class="pro-audio-player">
                                         <button class="play-trigger" @onclick="() => TogglePlay(item)">
@@ -186,18 +213,45 @@
                         }
 
                         <section class="reviews-section mt-5">
-                            <div class="section-top"><h3>Отзывы</h3><div class="avg-rating-big"><i class="bi bi-star-fill"></i> @(engineerData?.AvgRating.ToString("F1") ?? "0.0")</div></div>
-                            @if (reviews == null || !reviews.Any()) { <div class="empty-reviews-glass"><i class="bi bi-chat-left-dots"></i><p>Отзывов пока нет.</p></div> }
-                            else {
+                            <div class="section-top">
+                                <h3>Отзывы клиентов (@reviews.Count)</h3>
+                                <div class="avg-rating-big">
+                                    <i class="bi bi-star-fill"></i> @(engineerData?.AvgRating.ToString("F1") ?? "0.0")
+                                </div>
+                            </div>
+
+                            @if (!reviews.Any())
+                            {
+                                <div class="empty-reviews-glass">
+                                    <i class="bi bi-chat-left-dots"></i>
+                                    <p>У этого специалиста пока нет отзывов. Станьте первым!</p>
+                                </div>
+                            }
+                            else
+                            {
                                 <div class="reviews-grid">
-                                    @foreach (var review in reviews) {
-                                        <div class="review-card-web">
+                                    @foreach (var review in reviews)
+                                    {
+                                        <div class="review-card-web animate__animated animate__fadeIn">
                                             <div class="review-header">
-                                                <span class="reviewer-name">@review.ReviewerName</span>
-                                                <div class="stars">@for (int i = 1; i <= 5; i++) { <i class="bi @(i <= review.Rating ? "bi-star-fill" : "bi-star")"></i> }</div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="mini-ava-review"><i class="bi bi-person-circle"></i></div>
+                                                    <span class="reviewer-name">@review.ReviewerName</span>
+                                                </div>
+                                                <div class="stars">
+                                                    @for (int i = 1; i <= 5; i++)
+                                                    {
+                                                        <i class="bi @(i <= review.Rating ? "bi-star-fill" : "bi-star")"></i>
+                                                    }
+                                                </div>
                                             </div>
                                             <p class="review-comment">@review.Comment</p>
-                                            <span class="review-date">@review.CreatedAt.ToString("dd.MM.yyyy")</span>
+                                            <div class="review-footer">
+                                                <span class="review-date">
+                                                    <i class="bi bi-calendar-event me-1"></i>
+                                                    @review.CreatedAt.ToString("dd MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))
+                                                </span>
+                                            </div>
                                         </div>
                                     }
                                 </div>
@@ -212,7 +266,8 @@
 
 <MixMeClient.Pages.OrderModal @ref="orderModal" EngineerId="@(user?.Id ?? Guid.Empty)" EngineerName="@(user?.Username ?? "")" />
 
-@if (showAddPortfolioModal) {
+@if (showAddPortfolioModal)
+{
     <div class="modal-overlay fade-in">
         <div class="modal-glass-card">
             <header class="modal-header-pro"><h3>Новая работа</h3><button class="close-modal" @onclick="() => showAddPortfolioModal = false"><i class="bi bi-x-lg"></i></button></header>
@@ -228,6 +283,53 @@
         </div>
     </div>
 }
+@* МОДАЛЬНОЕ ОКНО ПРЕДЛОЖЕНИЯ УСЛУГ (ИНЖЕНЕР -> ЗАКАЗЧИК) *@
+@if (showOfferModal)
+{
+    <div class="modal-overlay fade-in">
+        <div class="modal-glass-card">
+            <header class="modal-header-pro">
+                <h3>Сделать предложение</h3>
+                <button class="close-modal" @onclick="() => showOfferModal = false">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div class="modal-body-pro">
+                <p class="text-muted small mb-4">
+                    Вы предлагаете услуги пользователю <strong>@user?.Username</strong>.
+                    После отправки будет создан проект, который заказчик сможет оплатить.
+                </p>
+
+                <div class="input-field">
+                    <label>Название услуги</label>
+                    <input type="text" @bind="offerServiceName" placeholder="Напр. Сведение и мастеринг" />
+                </div>
+
+                <div class="input-field">
+                    <label>Стоимость (₽)</label>
+                    <input type="number" @bind="offerPrice" />
+                </div>
+            </div>
+
+            <footer class="modal-footer-pro">
+                <button class="btn-save-pro" @onclick="SendOfferToCustomer" disabled="@isSendingOffer">
+                    @if (isSendingOffer)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Отправка...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-send-fill me-2"></i>
+                        <span>Отправить предложение</span>
+                    }
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
 <style>
     /* --- ГЛОБАЛЬНЫЙ КОНТЕЙНЕР И СКРОЛЛБАР --- */
     .profile-container-full {
@@ -414,6 +516,64 @@
         gap: 8px;
     }
 
+    .card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .card-top-right {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    /* КНОПКА УДАЛЕНИЯ */
+    .btn-del-work {
+        background: rgba(255, 82, 82, 0.1);
+        border: 1px solid rgba(255, 82, 82, 0.2);
+        color: #ff5252;
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-del-work:hover {
+            background: #ff5252;
+            color: white;
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(255, 82, 82, 0.3);
+        }
+
+    .mini-ava-review {
+        width: 30px;
+        height: 30px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--pink);
+    }
+
+    .review-card-web {
+        background: rgba(255,255,255,0.03) !important;
+        border: 1px solid rgba(255,255,255,0.05) !important;
+        padding: 20px !important;
+        border-radius: 20px !important;
+        margin-bottom: 15px;
+    }
+
+    .review-footer {
+        border-top: 1px solid rgba(255,255,255,0.05);
+        margin-top: 10px;
+        padding-top: 10px;
+    }
     /* --- СЕТКА И КАРТОЧКИ --- */
     .profile-grid-layout {
         display: grid;
@@ -895,7 +1055,65 @@
         gap: 12px;
         margin-top: 25px;
     }
+    /* Стиль основной кнопки в модалке предложения */
+    .btn-save-pro {
+        background: linear-gradient(135deg, #E91E63 0%, #ff2e75 100%);
+        color: white;
+        border: none;
+        padding: 16px 35px;
+        border-radius: 20px;
+        font-weight: 800;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 10px 25px rgba(233, 30, 99, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%; /* Можно убрать, если хочешь кнопку не на всю ширину */
+    }
 
+        /* Эффект при наведении */
+        .btn-save-pro:hover:not(:disabled) {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(233, 30, 99, 0.5);
+            filter: brightness(1.1);
+        }
+
+        /* Эффект при клике */
+        .btn-save-pro:active:not(:disabled) {
+            transform: translateY(0) scale(1);
+        }
+
+        /* Состояние загрузки или блокировки */
+        .btn-save-pro:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #444;
+            box-shadow: none;
+        }
+
+    /* Стиль иконки закрытия модалки (крестик) */
+    .close-modal {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: white;
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .close-modal:hover {
+            background: #E91E63;
+            border-color: #E91E63;
+            transform: rotate(90deg);
+        }
     /* Общие стили для обеих кнопок */
     .btn-order-main, .btn-chat-secondary {
         display: flex;
@@ -975,9 +1193,13 @@
 @code {
     private MixMeClient.Pages.OrderModal orderModal = default!;
     private string BaseApiUrl = "https://localhost:7237";
+
+    [Parameter][SupplyParameterFromQuery] public string? action { get; set; }
     [Parameter] public Guid? UserId { get; set; }
+
     private UserProfile? user;
     private Engineer? engineerData;
+    private int completedOrdersCount = 0; // Новая переменная для статистики
     private List<PortfolioItem> portfolioItems = new();
     private List<ReviewDto> reviews = new();
 
@@ -989,32 +1211,102 @@
     private double progressPercent => duration > 0 ? (currentTime / duration) * 100 : 0;
     private PortfolioItem newItem = new();
 
-    protected override async Task OnInitializedAsync()
+    private bool showOfferModal = false;
+    private string offerServiceName = "Сведение и мастеринг";
+    private decimal offerPrice = 5000;
+    private bool isSendingOffer = false;
+
+    // Срабатывает каждый раз при инициализации или смене ID в URL
+    protected override async Task OnParametersSetAsync()
     {
+        // 1. Сброс данных для лоадера
+        user = null;
+        engineerData = null;
+        completedOrdersCount = 0;
+        portfolioItems = new();
+        reviews = new();
+        activeItem = null;
+        isPlaying = false;
+        currentTrackUrl = "";
+
+        // 2. Определение целевого ID
         Guid targetId = UserId ?? Auth.User?.Id ?? Guid.Empty;
-        if (targetId == Guid.Empty) { Nav.NavigateTo("/login"); return; }
+        if (targetId == Guid.Empty)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
         try
         {
+            // 3. Загрузка основного профиля
             user = await Http.GetFromJsonAsync<UserProfile>($"{BaseApiUrl}/api/profiles/{targetId}");
+
             if (user?.RoleId == 2)
             {
-                engineerData = await Http.GetFromJsonAsync<Engineer>($"{BaseApiUrl}/api/engineers/{targetId}");
+                // ИСПРАВЛЕНО: Загружаем через обертку для получения статистики выполненных заказов
+                var engResponse = await Http.GetFromJsonAsync<EngineerWrapper>($"{BaseApiUrl}/api/engineers/{targetId}");
+                if (engResponse != null)
+                {
+                    engineerData = engResponse.Data;
+                    completedOrdersCount = engResponse.CompletedOrdersCount;
+                }
+
                 portfolioItems = await Http.GetFromJsonAsync<List<PortfolioItem>>($"{BaseApiUrl}/api/portfolios/engineer/{targetId}") ?? new();
                 reviews = await Http.GetFromJsonAsync<List<ReviewDto>>($"{BaseApiUrl}/api/reviews/engineer/{targetId}") ?? new();
             }
         }
-        catch (Exception ex) { Console.WriteLine(ex.Message); }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке профиля: {ex.Message}");
+        }
+
+        // Логика открытия модалки предложения
+        if (action == "offer" && Auth.User?.RoleId == 2 && user?.RoleId == 1)
+        {
+            showOfferModal = true;
+        }
+    }
+
+    private async Task DeleteWork(int id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту работу из портфолио?")) return;
+
+        try
+        {
+            var res = await Http.DeleteAsync($"{BaseApiUrl}/api/portfolios/{id}");
+            if (res.IsSuccessStatusCode)
+            {
+                portfolioItems.RemoveAll(p => p.Id == id);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка удаления: {ex.Message}");
+        }
     }
 
     private async Task HandleLogout() { await Auth.Logout(); Nav.NavigateTo("/"); }
-    private string GetAvatarUrl(string? url) => string.IsNullOrEmpty(url) ? "" : (url.StartsWith("http") ? url : BaseApiUrl + "/" + url.TrimStart('/'));
+
+    private string GetAvatarUrl(string? url) =>
+        string.IsNullOrEmpty(url) ? "" : (url.StartsWith("http") ? url : BaseApiUrl + "/" + url.TrimStart('/'));
+
     private string FormatTime(double sec) => TimeSpan.FromSeconds(sec).ToString(@"m\:ss");
 
     private async Task TogglePlay(PortfolioItem item)
     {
-        if (activeItem?.Id != item.Id) { activeItem = item; UpdateTrackUrl(); await Task.Delay(50); await JS.InvokeVoidAsync("eval", "document.querySelector('audio').load()"); }
+        if (activeItem?.Id != item.Id)
+        {
+            activeItem = item;
+            UpdateTrackUrl();
+            await Task.Delay(50);
+            await JS.InvokeVoidAsync("eval", "document.querySelector('audio').load()");
+        }
+
         if (isPlaying) await JS.InvokeVoidAsync("eval", "document.querySelector('audio').pause()");
         else await JS.InvokeVoidAsync("eval", "document.querySelector('audio').play()");
+
         isPlaying = !isPlaying;
     }
 
@@ -1023,13 +1315,41 @@
         if (activeItem == null || duration <= 0) return;
         var data = await JS.InvokeAsync<double[]>("eval", "(function(){let r=document.querySelector('.seek-bar-bg').getBoundingClientRect();return [r.left, r.width];})()");
         double newTime = ((e.ClientX - data[0]) / data[1]) * duration;
-        await JS.InvokeVoidAsync("eval", $"document.querySelector('audio').currentTime = {newTime.ToString(CultureInfo.InvariantCulture)}");
+        await JS.InvokeVoidAsync("eval", $"document.querySelector('audio').currentTime = {newTime.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
     }
 
-    private async Task OnTimeUpdate() { var t = await JS.InvokeAsync<double>("eval", "document.querySelector('audio').currentTime"); if (Math.Abs(currentTime - t) > 0.1) { currentTime = t; StateHasChanged(); } }
-    private async Task OnLoadedMetadata() { duration = await JS.InvokeAsync<double>("eval", "document.querySelector('audio').duration"); StateHasChanged(); }
-    private void SetMode(PortfolioItem item, bool after) { activeItem = item; isAfterMode = after; UpdateTrackUrl(); JS.InvokeVoidAsync("eval", "let a=document.querySelector('audio');let t=a.currentTime;a.load();a.onloadeddata=()=>{a.currentTime=t;a.play();}"); isPlaying = true; }
-    private void UpdateTrackUrl() { if (activeItem == null) return; var p = isAfterMode ? activeItem.AudioAfterUrl : activeItem.AudioBeforeUrl; currentTrackUrl = p.StartsWith("http") ? p : BaseApiUrl + "/" + p.TrimStart('/'); }
+    private async Task OnTimeUpdate()
+    {
+        var t = await JS.InvokeAsync<double>("eval", "document.querySelector('audio').currentTime");
+        if (Math.Abs(currentTime - t) > 0.1)
+        {
+            currentTime = t;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnLoadedMetadata()
+    {
+        duration = await JS.InvokeAsync<double>("eval", "document.querySelector('audio').duration");
+        StateHasChanged();
+    }
+
+    private void SetMode(PortfolioItem item, bool after)
+    {
+        activeItem = item;
+        isAfterMode = after;
+        UpdateTrackUrl();
+        JS.InvokeVoidAsync("eval", "let a=document.querySelector('audio');let t=a.currentTime;a.load();a.onloadeddata=()=>{a.currentTime=t;a.play();}");
+        isPlaying = true;
+    }
+
+    private void UpdateTrackUrl()
+    {
+        if (activeItem == null) return;
+        var p = isAfterMode ? activeItem.AudioAfterUrl : activeItem.AudioBeforeUrl;
+        if (string.IsNullOrEmpty(p)) return;
+        currentTrackUrl = p.StartsWith("http") ? p : BaseApiUrl + "/" + p.TrimStart('/');
+    }
 
     private async Task UploadAudio(InputFileChangeEventArgs e, bool isBefore)
     {
@@ -1057,23 +1377,100 @@
         {
             var s = await res.Content.ReadFromJsonAsync<PortfolioItem>();
             if (s != null) portfolioItems.Insert(0, s);
-            showAddPortfolioModal = false; newItem = new();
+            showAddPortfolioModal = false;
+            newItem = new();
         }
     }
+
     private async Task OpenDirectChat()
     {
-        // Логика: Находим любой существующий заказ с этим человеком или создаем "чат-запрос"
-        // Для диплома проще всего: перенаправить на страницу всех чатов
-        Nav.NavigateTo("/chats");
-    }
-    private void OpenOrderModal()
-    {
-        // Метод вызывает функцию Show() у компонента модального окна,
-        // который мы привязали через @ref="orderModal"
-        if (orderModal != null)
+        if (user == null || Auth.User == null) return;
+
+        try
         {
-            orderModal.Show();
+            // 1. Загружаем все заказы текущего пользователя через API
+            var allOrders = await Http.GetFromJsonAsync<List<MixMeClient.Pages.Orders.OrderViewModel>>(
+                $"{BaseApiUrl}/api/orders/user/{Auth.User.Id}?requesterId={Auth.User.Id}");
+
+            // 2. Ищем, есть ли хоть один заказ, где партнером выступает текущий liza (или другой профиль)
+            var existingOrder = allOrders?.FirstOrDefault(o => o.PartnerName == user.Username);
+
+            if (existingOrder != null)
+            {
+                // Если заказ/чат найден — переходим прямо в него
+                Nav.NavigateTo($"/order/{existingOrder.Id}");
+            }
+            else
+            {
+                // Если заказов нет — выводим красивое подтверждение
+                bool confirmOrder = await JS.InvokeAsync<bool>("confirm",
+                    $"Для того чтобы написать {user.Username}, нужно выбрать одну из услуг. Открыть список услуг?");
+
+                if (confirmOrder)
+                {
+                    OpenOrderModal(); // Открываем окно выбора услуги
+                }
+            }
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при поиске чата: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Не удалось загрузить список сообщений. Попробуйте позже.");
+        }
+    }
+
+    private void OpenOrderModal() { if (orderModal != null) orderModal.Show(); }
+
+    private async Task SendOfferToCustomer()
+    {
+        if (user == null || Auth.User == null) return;
+        if (string.IsNullOrWhiteSpace(offerServiceName) || offerPrice <= 0)
+        {
+            await JS.InvokeVoidAsync("alert", "Введите название услуги и корректную цену");
+            return;
+        }
+
+        isSendingOffer = true;
+
+        // Создаем объект заказа (укажите ServiceId = 0 или любой ID по умолчанию для кастомных предложений)
+        var dto = new
+        {
+            CustomerId = user.Id,
+            EngineerId = Auth.User.Id,
+            ServiceId = 1, // Или другой ID из вашей БД
+            TotalAmount = offerPrice
+        };
+
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/orders/create", dto);
+            if (res.IsSuccessStatusCode)
+            {
+                var newOrderId = await res.Content.ReadFromJsonAsync<Guid>();
+                showOfferModal = false;
+                // Переходим в созданный чат заказа
+                Nav.NavigateTo($"/order/{newOrderId}");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка при создании предложения");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSendingOffer = false;
+        }
+    }
+
+    // КЛАССЫ МОДЕЛЕЙ
+    public class EngineerWrapper
+    {
+        public Engineer Data { get; set; } = new();
+        public int CompletedOrdersCount { get; set; }
     }
 
     public class UploadResult { public string Url { get; set; } = ""; }

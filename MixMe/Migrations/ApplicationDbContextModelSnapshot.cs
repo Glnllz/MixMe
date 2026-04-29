@@ -300,6 +300,9 @@ namespace MixMe.Migrations
                     b.Property<Guid>("ReviewerId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ReviewerName")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.ToTable("Reviews");

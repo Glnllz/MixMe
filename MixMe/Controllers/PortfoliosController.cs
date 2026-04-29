@@ -33,4 +33,13 @@ public class PortfoliosController : ControllerBase
         await _context.SaveChangesAsync();
         return Ok(item);
     }
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeletePortfolioItem(int id)
+    {
+        var item = await _context.Portfolios.FindAsync(id);
+        if (item == null) return NotFound();
+        _context.Portfolios.Remove(item);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
 }

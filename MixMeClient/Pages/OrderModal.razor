@@ -11,15 +11,27 @@
                 <h3>Заказать у @EngineerName</h3>
                 <button class="btn-close" @onclick="Close">&times;</button>
             </div>
+
             <div class="modal-body">
-                @if (services.Any())
+                @if (isLoadingServices)
                 {
-                    <p>Выберите услугу:</p>
-                    <div class="services-list">
+                    <div class="loader-box-modal">
+                        <div class="spinner-border text-pink" role="status"></div>
+                        <p class="mt-2 text-muted">Загрузка прайс-листа...</p>
+                    </div>
+                }
+                else if (services != null && services.Any())
+                {
+                    <p class="section-hint">Выберите тип услуги:</p>
+                    <div class="services-list scroll-styled">
                         @foreach (var s in services)
                         {
-                            <div class="service-item @(selectedService?.Id == s.Id ? "active" : "")" @onclick="() => selectedService = s">
-                                <span class="name">@s.Name</span>
+                            <div class="service-item @(selectedService?.Id == s.Id ? "active" : "")"
+                                 @onclick="() => selectedService = s">
+                                <div class="s-info">
+                                    <span class="name">@s.Name</span>
+                                    <i class="bi bi-check-circle-fill check-icon"></i>
+                                </div>
                                 <span class="price">@s.Price.ToString("N0") ₽</span>
                             </div>
                         }
@@ -27,12 +39,25 @@
                 }
                 else
                 {
-                    <p class="text-muted">У инженера еще нет прайс-листа.</p>
+                    <div class="empty-services-modal">
+                        <i class="bi bi-clipboard-x mb-2"></i>
+                        <p>У инженера еще нет активных услуг.</p>
+                    </div>
                 }
             </div>
+
             <div class="modal-footer">
-                <button class="btn-confirm" @onclick="ConfirmOrder" disabled="@(selectedService == null || isCreating)">
-                    @(isCreating ? "Создание..." : "Подтвердить заказ")
+                <button class="btn-confirm" @onclick="ConfirmOrder"
+                        disabled="@(selectedService == null || isCreating || isLoadingServices)">
+                    @if (isCreating)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Создание заказа...</span>
+                    }
+                    else
+                    {
+                        <span>Подтвердить заказ</span>
+                    }
                 </button>
             </div>
         </div>
@@ -43,8 +68,8 @@
     .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.8);
-        backdrop-filter: blur(10px);
+        background: rgba(0,0,0,0.85);
+        backdrop-filter: blur(15px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -52,83 +77,225 @@
     }
 
     .modal-dialog-pro {
-        background: #141414;
+        background: #111;
         border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 30px;
-        width: 450px;
-        padding: 30px;
-        box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+        border-radius: 35px;
+        width: 100%;
+        max-width: 460px;
+        padding: 35px;
+        box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+        position: relative;
     }
 
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
+    .modal-header h3 {
+        font-weight: 900;
+        letter-spacing: -1px;
+        margin: 0;
+        color: white;
     }
 
     .btn-close {
-        background: none;
+        background: rgba(255,255,255,0.05);
         border: none;
         color: white;
-        font-size: 2rem;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
         cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-close:hover {
+            background: #E91E63;
+            transform: rotate(90deg);
+        }
+
+    .section-hint {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.4);
+        font-weight: 800;
+        margin-bottom: 15px;
+        letter-spacing: 1px;
+    }
+
+    .services-list {
+        max-height: 300px;
+        overflow-y: auto;
+        padding-right: 5px;
     }
 
     .service-item {
         display: flex;
         justify-content: space-between;
-        padding: 15px;
-        border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 15px;
+        align-items: center;
+        padding: 18px 22px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 20px;
         cursor: pointer;
         transition: 0.2s;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
     }
+
+        .service-item:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.1);
+        }
 
         .service-item.active {
             border-color: #E91E63;
-            background: rgba(233,30,99,0.1);
+            background: rgba(233,30,99,0.08);
+            box-shadow: 0 0 20px rgba(233, 30, 99, 0.1);
         }
+
+    .s-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .service-item .name {
+        font-weight: 700;
+        color: white;
+    }
+
+    .check-icon {
+        color: #E91E63;
+        font-size: 1.1rem;
+        opacity: 0;
+        transform: scale(0.5);
+        transition: 0.2s;
+    }
+
+    .service-item.active .check-icon {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    .service-item .price {
+        color: #00bcd4;
+        font-weight: 900;
+        font-size: 1.1rem;
+    }
 
     .btn-confirm {
         width: 100%;
         background: #E91E63;
         color: white;
         border: none;
-        padding: 15px;
-        border-radius: 15px;
+        padding: 18px;
+        border-radius: 20px;
         font-weight: 800;
+        font-size: 1rem;
         cursor: pointer;
+        transition: 0.3s;
+        box-shadow: 0 10px 25px rgba(233, 30, 99, 0.3);
+    }
+
+        .btn-confirm:hover:not(:disabled) {
+            transform: translateY(-3px);
+            background: #ff2e75;
+            box-shadow: 0 15px 30px rgba(233, 30, 99, 0.4);
+        }
+
+        .btn-confirm:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+    /* Вспомогательные стили */
+    .loader-box-modal, .empty-services-modal {
+        padding: 40px 0;
+        text-align: center;
+    }
+
+        .empty-services-modal i {
+            font-size: 3rem;
+            color: rgba(255,255,255,0.1);
+            display: block;
+        }
+
+    .text-pink {
+        color: #E91E63 !important;
     }
 </style>
 
 @code {
     [Parameter] public Guid EngineerId { get; set; }
     [Parameter] public string EngineerName { get; set; } = "";
-    private bool IsVisible = false, isCreating = false;
+
+    private bool IsVisible = false;
+    private bool isCreating = false;
+    private bool isLoadingServices = false;
+
     private List<MusicService> services = new();
     private MusicService? selectedService;
     private string BaseApiUrl = "https://localhost:7237";
 
     public async Task Show()
     {
-        services = await Http.GetFromJsonAsync<List<MusicService>>($"{BaseApiUrl}/api/services/engineer/{EngineerId}") ?? new();
-        IsVisible = true; StateHasChanged();
+        IsVisible = true;
+        services = new(); // Сбрасываем старые данные
+        isLoadingServices = true; // Показываем лоадер
+
+        // ПЕРВЫЙ ВЫЗОВ: чтобы Blazor сразу отрисовал открытую модалку со спиннером
+        StateHasChanged();
+
+        try
+        {
+            services = await Http.GetFromJsonAsync<List<MusicService>>($"{BaseApiUrl}/api/services/engineer/{EngineerId}") ?? new();
+        }
+        finally
+        {
+            isLoadingServices = false;
+            // ВТОРОЙ ВЫЗОВ: чтобы Blazor убрал спиннер и показал список
+            StateHasChanged();
+        }
     }
-    public void Close() { IsVisible = false; }
+
+    public void Close()
+    {
+        if (!isCreating) IsVisible = false;
+    }
 
     private async Task ConfirmOrder()
     {
         if (selectedService == null || Auth.User == null) return;
+
         isCreating = true;
-        var dto = new { CustomerId = Auth.User.Id, EngineerId = EngineerId, ServiceId = selectedService.Id, TotalAmount = selectedService.Price };
-        var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/orders/create", dto);
-        if (res.IsSuccessStatusCode)
+        StateHasChanged();
+
+        var dto = new
         {
-            var newId = await res.Content.ReadFromJsonAsync<Guid>();
-            Nav.NavigateTo($"/order/{newId}");
+            CustomerId = Auth.User.Id,
+            EngineerId = EngineerId,
+            ServiceId = selectedService.Id,
+            TotalAmount = selectedService.Price
+        };
+
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/orders/create", dto);
+            if (res.IsSuccessStatusCode)
+            {
+                var newId = await res.Content.ReadFromJsonAsync<Guid>();
+                IsVisible = false;
+                Nav.NavigateTo($"/order/{newId}");
+            }
         }
-        isCreating = false;
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка создания заказа: {ex.Message}");
+        }
+        finally
+        {
+            isCreating = false;
+            StateHasChanged();
+        }
     }
 }
