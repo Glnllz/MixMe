@@ -1230,7 +1230,12 @@
         currentTrackUrl = "";
 
         // 2. Определение целевого ID
+        // Если мы еще не знаем кто мы (Auth не успел подгрузиться),
+        // и UserId в ссылке нет — просто выходим из метода, MainLayout скоро всё подгрузит.
+        if (UserId == null && Auth.User == null) return;
+
         Guid targetId = UserId ?? Auth.User?.Id ?? Guid.Empty;
+
         if (targetId == Guid.Empty)
         {
             Nav.NavigateTo("/login");

@@ -9,6 +9,10 @@ public class ChatHub : Hub
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, orderId);
     }
+    public async Task JoinPersonalGroup(string userId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, userId);
+    }
 
     // Отправка сообщения участникам заказа
     public async Task SendMessage(string orderId, string user, string message)

@@ -4,8 +4,8 @@ using MixMe.Data;
 using MixMeShared;
 using MixMe.Services;
 using Yandex.Checkout.V3;
-using Microsoft.AspNetCore.SignalR; // Добавлено
-using MixMe.Hubs; // Добавлено
+using Microsoft.AspNetCore.SignalR;
+using MixMe.Hubs;
 
 namespace MixMe.Controllers;
 
@@ -14,7 +14,7 @@ namespace MixMe.Controllers;
 public class OrdersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    private readonly IHubContext<ChatHub> _hubContext; // Добавлено
+    private readonly IHubContext<ChatHub> _hubContext;
 
     public OrdersController(ApplicationDbContext context, IHubContext<ChatHub> hubContext)
     {
@@ -42,21 +42,24 @@ public class OrdersController : ControllerBase
         var service = await _context.Services.FindAsync(dto.ServiceId);
         string serviceName = service?.Name ?? "Индивидуальное предложение";
 
+        var content = $"🤖 Проект '{serviceName}' создан. Ожидается оплата заказчиком.";
         var systemMsg = new Message
         {
             OrderId = newOrder.Id,
             SenderId = Guid.Empty,
-            Content = $"🤖 Проект '{serviceName}' создан. Ожидается оплата заказчиком.",
+            Content = content,
             SentAt = DateTime.UtcNow
         };
 
         _context.Messages.Add(systemMsg);
         await _context.SaveChangesAsync();
 
+        // УВЕДОМЛЕНИЕ: Отправляем инженеру персонально, что у него новый заказ
+        await _hubContext.Clients.Group(dto.EngineerId.ToString()).SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", content);
+
         return Ok(newOrder.Id);
     }
 
-    // ... методы GetUserOrders и GetOrderDetails без изменений ...
     [HttpGet("user/{userId}")]
     public async Task<ActionResult<IEnumerable<object>>> GetUserOrders(Guid userId, [FromQuery] Guid requesterId)
     {
@@ -70,10 +73,28 @@ public class OrdersController : ControllerBase
                 TotalAmount = o.TotalAmount,
                 Status = o.Status,
                 CreatedAt = o.CreatedAt,
-                PartnerName = _context.Profiles.Where(p => p.Id == (o.CustomerId == userId ? o.EngineerId : o.CustomerId)).Select(p => p.Username).FirstOrDefault(),
-                PartnerAvatar = _context.Profiles.Where(p => p.Id == (o.CustomerId == userId ? o.EngineerId : o.CustomerId)).Select(p => p.AvatarUrl).FirstOrDefault(),
-                LastMessage = _context.Messages.Where(m => m.OrderId == o.Id).OrderByDescending(m => m.SentAt).Select(m => m.Content).FirstOrDefault() ?? "Чат создан",
-                ServiceName = _context.Services.Where(s => s.Id == o.ServiceId).Select(s => s.Name).FirstOrDefault() ?? "Индивидуальный заказ"
+                PartnerName = _context.Profiles
+                    .Where(p => p.Id == (o.CustomerId == userId ? o.EngineerId : o.CustomerId))
+                    .Select(p => p.Username)
+                    .FirstOrDefault(),
+                PartnerAvatar = _context.Profiles
+                    .Where(p => p.Id == (o.CustomerId == userId ? o.EngineerId : o.CustomerId))
+                    .Select(p => p.AvatarUrl)
+                    .FirstOrDefault(),
+                LastMessage = _context.Messages
+                    .Where(m => m.OrderId == o.Id)
+                    .OrderByDescending(m => m.SentAt)
+                    .Select(m => m.Content)
+                    .FirstOrDefault() ?? "Проект создан",
+                LastMessageTime = _context.Messages
+                    .Where(m => m.OrderId == o.Id)
+                    .OrderByDescending(m => m.SentAt)
+                    .Select(m => (DateTime?)m.SentAt)
+                    .FirstOrDefault() ?? o.CreatedAt,
+                ServiceName = _context.Services
+                    .Where(s => s.Id == o.ServiceId)
+                    .Select(s => s.Name)
+                    .FirstOrDefault() ?? "Индивидуальный заказ"
             }).ToListAsync());
     }
 
@@ -84,7 +105,6 @@ public class OrdersController : ControllerBase
         var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
         if (order == null) return NotFound();
 
-        // Проверка безопасности: только участники заказа могут видеть детали
         if (order.CustomerId != currentUserId && order.EngineerId != currentUserId)
             return StatusCode(403);
 
@@ -103,7 +123,6 @@ public class OrdersController : ControllerBase
             Id = order.Id,
             Status = order.Status,
             TotalAmount = order.TotalAmount,
-            // Обязательно передаем ID участников для работы системы отзывов и файлов
             CustomerId = order.CustomerId,
             EngineerId = order.EngineerId,
             PartnerName = (currentUserId == order.CustomerId) ? engineerName : customerName,
@@ -127,8 +146,12 @@ public class OrdersController : ControllerBase
         _context.Messages.Add(new Message { OrderId = id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
         await _context.SaveChangesAsync();
 
-        // УВЕДОМЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ
-        await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "Система", content);
+        // УВЕДОМЛЕНИЕ: 1. В группу заказа (для тех, кто внутри чата)
+        await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+
+        // УВЕДОМЛЕНИЕ: 2. Персонально обоим участникам (чтобы сработала точка в MainLayout на других страницах)
+        await _hubContext.Clients.Group(order.CustomerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+        await _hubContext.Clients.Group(order.EngineerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
 
         return Ok();
     }
@@ -165,8 +188,12 @@ public class OrdersController : ControllerBase
             _context.Messages.Add(new Message { OrderId = order.Id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
             await _context.SaveChangesAsync();
 
-            // УВЕДОМЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ
-            await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "Система", content);
+            // УВЕДОМЛЕНИЕ: В группу заказа
+            await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+
+            // УВЕДОМЛЕНИЕ: Персонально участникам
+            await _hubContext.Clients.Group(order.CustomerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+            await _hubContext.Clients.Group(order.EngineerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
 
             return Ok(new { paid = true });
         }
@@ -178,6 +205,7 @@ public class OrdersController : ControllerBase
         "InProgress" => "В работе",
         "UnderReview" => "На проверке (результат загружен)",
         "Completed" => "Завершен (работа принята)",
+        "Cancelled" => "Отменен",
         _ => status
     };
 

@@ -24,10 +24,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
-        policy.WithOrigins("https://localhost:7246") // Проверь, что это ТВОЙ порт фронтенда
+        policy.SetIsOriginAllowed(origin => true) // Разрешить любые локальные порты для теста
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .AllowCredentials()); // Добавь это для SignalR и куки
+              .AllowCredentials());
 });
 
 builder.Services.AddSignalR();

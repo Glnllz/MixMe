@@ -95,6 +95,14 @@
                     </div>
                 }
 
+                @* --- НОВЫЙ БЛОК: ОШИБКА ВАЛИДАЦИИ --- *@
+                @if (!string.IsNullOrEmpty(validationError))
+                {
+                    <div class="validation-msg animate__animated animate__headShake">
+                        <i class="bi bi-magic me-2"></i> @validationError
+                    </div>
+                }
+
                 <div class="create-footer">
                     <div class="media-tools">
                         <label class="tool-icon" title="Загрузить фото">
@@ -106,7 +114,8 @@
                             <InputFile OnChange="e => UploadFile(e, false)" hidden accept="audio/*" />
                         </label>
                     </div>
-                    <button class="btn-send-main" @onclick="CreatePost" disabled="@(isSending || string.IsNullOrWhiteSpace(newPostContent))">
+                    @* ИЗМЕНЕНО: Кнопка активна даже если текст пустой (чтобы сработала проверка в коде) *@
+                    <button class="btn-send-main" @onclick="CreatePost" disabled="@isSending">
                         @if (isSending)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
@@ -169,25 +178,21 @@
                             }
 
                             <div class="post-card-footer">
-                                @* Кнопка Лайка остается для всех *@
                                 <button class="interaction-link @(post.IsLiked ? "liked" : "")" @onclick="() => HandleLike(post)">
                                     <i class="bi @(post.IsLiked ? "bi-heart-fill" : "bi-heart")"></i>
                                     <span>@post.LikeCount</span>
                                 </button>
 
-                                @* ПРОВЕРКА: Показываем кнопки взаимодействия только если это НЕ мой пост *@
                                 @if (Auth.User != null && post.UserId != Auth.User.Id)
                                 {
                                     if (Auth.User.RoleId == 2 && post.RoleId == 1)
                                     {
-                                        @* Если я инженер, а пост заказчика — предлагаем услуги *@
                                         <button class="interaction-link" @onclick="() => OpenOfferModal(post.UserId)" style="color: var(--pink)">
                                             <i class="bi bi-lightning-fill"></i> <span>Предложить услуги</span>
                                         </button>
                                     }
                                     else
                                     {
-                                        @* В остальных случаях (кроме своих постов) — кнопка связи *@
                                         <button class="interaction-link" @onclick='() => Nav.NavigateTo($"/profile/{post.UserId}")'>
                                             <i class="bi bi-chat-left-dots"></i> <span>Связаться</span>
                                         </button>
@@ -195,7 +200,6 @@
                                 }
                                 else if (Auth.User != null && post.UserId == Auth.User.Id)
                                 {
-                                    @* Для своих постов можно вывести небольшую плашку *@
                                     <span class="interaction-link" style="opacity: 0.5; cursor: default;">
                                         <i class="bi bi-person-check"></i> Ваш пост
                                     </span>
@@ -793,6 +797,19 @@
             background: var(--pink);
         }
 
+    .validation-msg {
+        background: rgba(233, 30, 99, 0.1);
+        border-left: 4px solid var(--pink);
+        color: #ff8585;
+        padding: 12px 20px;
+        border-radius: 12px;
+        margin: 15px 0;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+    }
+
     /* АНИМАЦИИ */
     .fade-in-up {
         animation: fadeInUp 0.5s ease-out forwards;
@@ -819,6 +836,7 @@
     private string? tempImageUrl, tempAudioUrl;
     private int activeFilter = 0;
     private bool isSending = false;
+    private string? validationError;
     private string BaseApiUrl = "https://localhost:7237";
 
     protected override async Task OnInitializedAsync()
@@ -878,7 +896,19 @@
 
     private async Task CreatePost()
     {
-        if (Auth.User == null || string.IsNullOrWhiteSpace(newPostContent)) return;
+        // Проверка на пустоту
+        if (string.IsNullOrWhiteSpace(newPostContent))
+        {
+            validationError = "Вашим мыслям нужно немного слов! Пожалуйста, напишите что-нибудь, прежде чем делиться с миром.";
+
+            // Убираем сообщение через 3 секунды автоматически
+            _ = Task.Delay(3000).ContinueWith(_ => { validationError = null; InvokeAsync(StateHasChanged); });
+            return;
+        }
+
+        if (Auth.User == null) return;
+
+        validationError = null; // Сбрасываем ошибку, если всё ок
         isSending = true;
 
         var post = new Post

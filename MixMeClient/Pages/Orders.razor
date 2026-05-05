@@ -317,6 +317,11 @@
             transform: translateY(0);
         }
     }
+
+    .status-badge.underreview {
+        background: rgba(0, 188, 212, 0.1); /* Голубой фон */
+        color: #00bcd4; /* Голубой текст */
+    }
 </style>
 
 @code {
@@ -347,6 +352,7 @@
         "Created" => "Создан",
         "WaitingForPayment" => "Ожидает оплаты",
         "InProgress" => "В работе",
+        "UnderReview" => "На проверке", 
         "Completed" => "Завершен",
         "Cancelled" => "Отменен",
         _ => status

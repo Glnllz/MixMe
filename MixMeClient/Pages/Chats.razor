@@ -45,7 +45,7 @@
                                 <div class="d-top">
                                     <span class="d-name">@d.PartnerName</span>
                                     @* ИСПРАВЛЕНО: добавили поле LastMessageTime в модель ниже *@
-                                    <span class="d-time">@d.LastMessageTime.ToString("HH:mm")</span>
+                                    <span class="d-time">@FormatDisplayDate(d.LastMessageTime)</span>
                                 </div>
                                 <p class="d-last-msg">@d.LastMessage</p>
                             </div>
@@ -268,6 +268,32 @@
         // Теперь мы используем просто id
         if (id == Guid.Empty) return;
         Nav.NavigateTo($"/order/{id}");
+    }
+    private string FormatDisplayDate(DateTime dt)
+    {
+        dt = dt.ToLocalTime();
+        var now = DateTime.Now;
+        var date = dt.Date;
+
+        // Если сообщение сегодня
+        if (date == now.Date)
+        {
+            return dt.ToString("HH:mm");
+        }
+
+        // Если сообщение вчера или на этой неделе (последние 7 дней)
+        if (date >= now.AddDays(-6).Date)
+        {
+            var culture = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+            // Если это вчера, можно написать "Вчера", либо день недели
+            if (date == now.AddDays(-1).Date) return "Вчера";
+
+            string dayName = culture.DateTimeFormat.GetAbbreviatedDayName(dt.DayOfWeek);
+            return char.ToUpper(dayName[0]) + dayName.Substring(1); // Пн, Вт...
+        }
+
+        // Если сообщение очень старое
+        return dt.ToString("d MMM", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
     }
 
     private string GetFullUrl(string? u) => string.IsNullOrEmpty(u) ? "" : (u.StartsWith("http") ? u : $"{BaseApiUrl}/{u.TrimStart('/')}");

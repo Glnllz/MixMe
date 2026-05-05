@@ -29,4 +29,19 @@ public class OrderFilesController : ControllerBase
             .OrderByDescending(f => f.UploadedAt)
             .ToListAsync();
     }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteFile(int id)
+    {
+        var file = await _context.OrderFiles.FindAsync(id);
+        if (file == null) return NotFound();
+
+        // Опционально: здесь можно добавить логику удаления физического файла с диска
+        // var filePath = Path.Combine(_env.WebRootPath, file.FileUrl.TrimStart('/'));
+        // if (System.IO.File.Exists(filePath)) System.IO.File.Delete(filePath);
+
+        _context.OrderFiles.Remove(file);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
 }

@@ -70,12 +70,18 @@
                             @foreach (var file in orderFiles.Where(f => f.FileType == "Stems"))
                             {
                                 <div class="file-item customer-file">
-                                    <i class="bi bi-archive-fill"></i>
+                                    <i class="bi bi-music-note-list"></i> @* Изменил иконку на музыкальную *@
                                     <div class="f-info">
                                         <span>@file.FileName</span>
                                         <p>Загружено заказчиком</p>
                                     </div>
-                                    <a href="@GetFullUrl(file.FileUrl)" target="_blank" class="btn-download"><i class="bi bi-download"></i></a>
+                                    <div class="file-actions d-flex gap-2">
+                                        <a href="@GetFullUrl(file.FileUrl)" target="_blank" class="btn-download"><i class="bi bi-download"></i></a>
+                                        @if (Auth.User?.Id == file.UploaderId) @* Удалить может только тот, кто загрузил *@
+                                        {
+                                            <button class="btn-del-file-mini" @onclick="() => DeleteFile(file.Id)"><i class="bi bi-trash3"></i></button>
+                                        }
+                                    </div>
                                 </div>
                             }
 
@@ -106,7 +112,7 @@
                                 <i class="bi bi-cloud-upload me-2"></i>
                                 <span>@(Auth.User?.RoleId == 1 ? "Загрузить дорожки" : "Загрузить результат")</span>
                             }
-                            <InputFile OnChange="UploadOrderFile" hidden disabled="@isUploading" />
+                            <InputFile OnChange="UploadOrderFile" hidden disabled="@isUploading" accept="audio/*" />
                         </label>
                     }
                 </div>
@@ -215,7 +221,7 @@
                                 <div class="msg-content">@msg.Text</div>
                                 @if (msg.User != "Система")
                                 {
-                                    <div class="msg-time">@DateTime.Now.ToString("HH:mm")</div>
+                                    <div class="msg-time">@msg.Time.ToString("HH:mm")</div>
                                 }
                             </div>
                         }
@@ -674,6 +680,27 @@
         animation: fadeInUp 0.5s ease-out;
         border: 1px solid rgba(233, 30, 99, 0.3) !important; /* Легкое розовое свечение границ */
     }
+
+    .btn-del-file-mini {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.2);
+        cursor: pointer;
+        transition: 0.2s;
+        font-size: 1rem;
+        padding: 0 5px;
+    }
+
+        .btn-del-file-mini:hover {
+            color: #ff5252;
+            transform: scale(1.2);
+        }
+
+    .file-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+    }
 </style>
 
 @code {
@@ -774,7 +801,8 @@
                             {
                                 User = (m.SenderId == Guid.Empty) ? "Система" :
                                        (m.SenderId == Auth.User?.Id ? Auth.User.Username : (order.PartnerName ?? "Партнер")),
-                                Text = m.Content
+                                Text = m.Content,
+                                Time = m.SentAt
                             }).ToList();
 
                         await ScrollToBottom();
@@ -843,6 +871,20 @@
 
     private async Task UploadOrderFile(InputFileChangeEventArgs e)
     {
+        // 1. Объявляем переменную один раз в начале метода
+        var file = e.File;
+
+        // 2. Проверка расширения (только музыка)
+        var allowedExtensions = new[] { ".mp3", ".wav", ".flac", ".aac", ".ogg" };
+        var extension = Path.GetExtension(file.Name).ToLower();
+
+        if (!allowedExtensions.Contains(extension))
+        {
+            await JS.InvokeVoidAsync("alert", "Ошибка: Разрешены только аудиофайлы (mp3, wav и т.д.)");
+            return;
+        }
+
+        // 3. Проверка логики заказа (для инженеров)
         if (Auth.User?.RoleId == 2)
         {
             bool hasStems = orderFiles.Any(f => f.FileType == "Stems");
@@ -856,9 +898,13 @@
         isUploading = true;
         try
         {
-            var file = e.File;
-            var content = new MultipartFormDataContent();
-            content.Add(new StreamContent(file.OpenReadStream(100 * 1024 * 1024)), "file", file.Name);
+            // ОШИБКА БЫЛА ТУТ: Мы удалили повторное объявление "var file = e.File;"
+
+            using var content = new MultipartFormDataContent();
+            // Используем переменную file, объявленную в начале метода
+            var stream = file.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024); // 100 MB
+            var fileContent = new StreamContent(stream);
+            content.Add(fileContent, "file", file.Name);
 
             var res = await Http.PostAsync($"{BaseApiUrl}/api/Files/upload", content);
             if (res.IsSuccessStatusCode)
@@ -874,12 +920,22 @@
                     };
 
                 await Http.PostAsJsonAsync($"{BaseApiUrl}/api/OrderFiles", newFile);
+
+                // Если загрузил инженер — переводим статус на проверку
                 if (Auth.User.RoleId == 2) await UpdateStatus("UnderReview");
+
                 await LoadAllData();
             }
         }
-        catch (Exception ex) { Console.WriteLine(ex.Message); }
-        finally { isUploading = false; }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Произошла ошибка при загрузке файла.");
+        }
+        finally
+        {
+            isUploading = false;
+        }
     }
 
     private async Task AcceptWork() => await UpdateStatus("Completed");
@@ -892,6 +948,27 @@
             if (res.IsSuccessStatusCode) await LoadAllData();
         }
         catch (Exception ex) { Console.WriteLine($"UpdateStatus Error: {ex.Message}"); }
+    }
+
+    private async Task DeleteFile(int fileId)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить этот файл?");
+        if (!confirmed) return;
+
+        try
+        {
+            var res = await Http.DeleteAsync($"{BaseApiUrl}/api/OrderFiles/{fileId}");
+            if (res.IsSuccessStatusCode)
+            {
+                // Обновляем список файлов локально
+                orderFiles.RemoveAll(f => f.Id == fileId);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
     }
 
     private async Task SendMessage()
@@ -964,7 +1041,7 @@
     }
 
     public class CheckResult { public bool Paid { get; set; } }
-    public class ChatMessage { public string User { get; set; } = ""; public string Text { get; set; } = ""; }
+    public class ChatMessage { public string User { get; set; } = ""; public string Text { get; set; } = ""; public DateTime Time { get; set; } = DateTime.Now; }
     public class UploadResult { public string Url { get; set; } = ""; }
 
     public class OrderDetailViewModel

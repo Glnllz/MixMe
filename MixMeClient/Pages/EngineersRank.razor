@@ -27,7 +27,18 @@
                         <div class="rank-pos">#@position</div>
 
                         <div class="rank-avatar-wrapper">
-                            <img src="@GetFullUrl(eng.AvatarUrl)" alt="avatar" />
+                            @if (!string.IsNullOrEmpty(eng.AvatarUrl) && eng.AvatarUrl != "string")
+                            {
+                                <img src="@GetFullUrl(eng.AvatarUrl)" alt="avatar" />
+                            }
+                            else
+                            {
+                                @* Статичная заглушка, если фото нет *@
+                                <div class="avatar-placeholder-rank">
+                                    <i class="bi bi-person-fill"></i>
+                                </div>
+                            }
+
                             @if (position == 1)
                             {
                                 <div class="crown"><i class="bi bi-patch-check-fill"></i></div>
@@ -61,18 +72,26 @@
 
 <style>
     .rank-page {
-        padding: 120px 20px 60px;
+        /* Изменяем padding, чтобы контент не перекрывался навигацией */
+        padding: 30px 20px 100px;
         min-height: 100vh;
+        width: 100%;
+        /* Гарантируем, что этот блок участвует в потоке скролла */
+        display: block;
+        position: relative;
+        overflow-y: visible;
     }
 
     .rank-container {
         max-width: 900px;
         margin: 0 auto;
+        /* Убираем возможные ограничения высоты */
+        height: auto;
     }
 
     .rank-header {
         text-align: center;
-        margin-bottom: 60px;
+        margin-bottom: 30px;
     }
 
     .trophy-icon {
@@ -125,13 +144,29 @@
         height: 80px;
     }
 
-        .rank-avatar-wrapper img {
-            width: 100%;
-            height: 100%;
-            border-radius: 22px;
-            object-fit: cover;
-            border: 2px solid rgba(255,255,255,0.1);
-        }
+    /* Стиль для статичной заглушки аватара */
+    .avatar-placeholder-rank {
+        width: 100%;
+        height: 100%;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.05); /* Легкий фон */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.2); /* Цвет иконки */
+        font-size: 2.2rem;
+    }
+
+    /* Дополнительно: чтобы картинки не "прыгали", если они еще грузятся */
+    .rank-avatar-wrapper img {
+        width: 100%;
+        height: 100%;
+        border-radius: 22px;
+        object-fit: cover;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background: #1a1a1a; /* Фон под картинкой */
+    }
 
     .crown {
         position: absolute;
@@ -239,8 +274,13 @@
         allEngineers = await Http.GetFromJsonAsync<List<EngineerRankModel>>($"{BaseApiUrl}/api/engineers/search?sortBy=rating");
     }
 
-    private string GetFullUrl(string? url) => string.IsNullOrEmpty(url) ? "images/default-avatar.png" : (url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}");
+    private string GetFullUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url == "string")
+            return ""; // Возвращаем пустоту, чтобы сработал @if в разметке
 
+        return url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}";
+    }
     public class EngineerRankModel
     {
         public Guid ProfileId { get; set; }
