@@ -6,9 +6,12 @@ using MixMe.Services;
 using Yandex.Checkout.V3;
 using Microsoft.AspNetCore.SignalR;
 using MixMe.Hubs;
+using Microsoft.AspNetCore.Authorization;
+using Notification = MixMeShared.Notification;
 
 namespace MixMe.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class OrdersController : ControllerBase
@@ -52,9 +55,19 @@ public class OrdersController : ControllerBase
         };
 
         _context.Messages.Add(systemMsg);
+
+        // --- НОВОЕ: Уведомление в БД для инженера ---
+        _context.Notifications.Add(new Notification
+        {
+            UserId = dto.EngineerId,
+            Text = $"У вас новый заказ на услугу: {serviceName}",
+            Link = $"/order/{newOrder.Id}",
+            CreatedAt = DateTime.UtcNow
+        });
+
         await _context.SaveChangesAsync();
 
-        // УВЕДОМЛЕНИЕ: Отправляем инженеру персонально, что у него новый заказ
+        // УВЕДОМЛЕНИЕ: Отправляем инженеру персонально через SignalR
         await _hubContext.Clients.Group(dto.EngineerId.ToString()).SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", content);
 
         return Ok(newOrder.Id);
@@ -144,12 +157,33 @@ public class OrdersController : ControllerBase
         string content = $"🤖 Статус заказа изменен на: {TranslateStatusForChat(newStatus)}";
 
         _context.Messages.Add(new Message { OrderId = id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
+
+        // --- НОВОЕ: Логика уведомлений в БД при смене статуса ---
+        if (newStatus == "UnderReview")
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = order.CustomerId,
+                Text = "Инженер загрузил результат! Пожалуйста, проверьте работу.",
+                Link = $"/order/{id}",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        else if (newStatus == "Completed")
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = order.EngineerId,
+                Text = "Заказчик принял работу! Проект успешно завершен.",
+                Link = $"/order/{id}",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
         await _context.SaveChangesAsync();
 
-        // УВЕДОМЛЕНИЕ: 1. В группу заказа (для тех, кто внутри чата)
+        // УВЕДОМЛЕНИЕ SignalR
         await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
-
-        // УВЕДОМЛЕНИЕ: 2. Персонально обоим участникам (чтобы сработала точка в MainLayout на других страницах)
         await _hubContext.Clients.Group(order.CustomerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
         await _hubContext.Clients.Group(order.EngineerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
 
@@ -186,12 +220,20 @@ public class OrdersController : ControllerBase
             string content = "✅ Оплата подтверждена. Средства зарезервированы. Исполнитель, приступайте к работе!";
 
             _context.Messages.Add(new Message { OrderId = order.Id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
+
+            // --- НОВОЕ: Уведомление в БД для инженера об оплате ---
+            _context.Notifications.Add(new Notification
+            {
+                UserId = order.EngineerId,
+                Text = "Заказ оплачен! Можете приступать к выполнению проекта.",
+                Link = $"/order/{order.Id}",
+                CreatedAt = DateTime.UtcNow
+            });
+
             await _context.SaveChangesAsync();
 
-            // УВЕДОМЛЕНИЕ: В группу заказа
+            // УВЕДОМЛЕНИЕ SignalR
             await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
-
-            // УВЕДОМЛЕНИЕ: Персонально участникам
             await _hubContext.Clients.Group(order.CustomerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
             await _hubContext.Clients.Group(order.EngineerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
 

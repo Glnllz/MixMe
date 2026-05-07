@@ -226,20 +226,20 @@
 
             if (response.IsSuccessStatusCode)
             {
-                // Читаем профиль пользователя из ответа
-                var loggedUser = await response.Content.ReadFromJsonAsync<UserProfile>();
+                // ИСПРАВЛЕНО: Читаем новый формат ответа (Токен + Пользователь)
+                var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
 
-                if (loggedUser != null)
+                if (result != null && result.User != null && !string.IsNullOrEmpty(result.Token))
                 {
-                    // Вызываем метод логина в сервисе (сохранение в LocalStorage и состояние)
-                    await Auth.Login(loggedUser);
+                    // ИСПРАВЛЕНО: Передаем в AuthService и токен, и данные профиля
+                    await Auth.Login(result.Token, result.User);
 
                     // Перенаправляем в ленту
                     Nav.NavigateTo("/feed");
                 }
                 else
                 {
-                    errorMessage = "Ошибка при чтении данных пользователя.";
+                    errorMessage = "Ошибка при получении данных авторизации.";
                 }
             }
             else
@@ -257,5 +257,12 @@
         {
             isLoading = false;
         }
+    }
+
+    // ИСПРАВЛЕНО: Вспомогательный класс для чтения ответа с JWT-токеном
+    public class LoginResponse
+    {
+        public string Token { get; set; } = string.Empty;
+        public UserProfile? User { get; set; }
     }
 }

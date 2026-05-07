@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MixMe.Data;
 using MixMeShared;
 
 namespace MixMe.Controllers;
-
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class PostsController : ControllerBase
@@ -15,9 +16,6 @@ public class PostsController : ControllerBase
     {
         _context = context;
     }
-
-    // Получить все посты с данными пользователей
-    // ... существующие импорты ...
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> GetPosts([FromQuery] Guid currentUserId)

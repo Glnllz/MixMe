@@ -50,6 +50,7 @@
                         </div>
                     </nav>
                     <div class="user-controls">
+                        <NotificationBell />
                         <div class="search-trigger" @onclick='() => Nav.NavigateTo("/search")'>
                             <i class="bi bi-search"></i>
                         </div>
@@ -95,7 +96,7 @@
     :root {
         --accent: #E91E63;
         --bg: #0B0B0B;
-        --border: rgba(255, 255, 255, 0.08);
+        --border: rgba(255, 255, 255, 0.15);
     }
 
     /* ФОН И КРУГИ */
@@ -136,6 +137,7 @@
         overflow-y: auto;
         overflow-x: hidden;
         z-index: 1;
+        color: #ffffff;
     }
 
     /* УВЕДОМЛЕНИЯ */

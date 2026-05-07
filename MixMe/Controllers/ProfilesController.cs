@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MixMe.Data;
 using MixMeShared;
@@ -63,7 +64,8 @@ public class ProfilesController : ControllerBase
         return Ok(profile);
     }
 
-    // MixMe/Controllers/ProfilesController.cs -> Метод UpdateProfile
+
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateProfile(Guid id, UserProfile updateDto)
     {

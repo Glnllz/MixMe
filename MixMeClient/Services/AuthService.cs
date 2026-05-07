@@ -19,9 +19,12 @@ public class AuthService
     }
 
     // Сохранение пользователя после логина
-    public async Task Login(UserProfile user)
+    public async Task Login(string token, UserProfile user)
     {
         User = user;
+        // Сохраняем токен отдельно
+        await _js.InvokeVoidAsync("localStorage.setItem", "authToken", token);
+        // Сохраняем данные профиля
         var json = JsonSerializer.Serialize(user);
         await _js.InvokeVoidAsync("localStorage.setItem", "currentUser", json);
     }
@@ -40,6 +43,7 @@ public class AuthService
     public async Task Logout()
     {
         User = null;
+        await _js.InvokeVoidAsync("localStorage.removeItem", "authToken");
         await _js.InvokeVoidAsync("localStorage.removeItem", "currentUser");
     }
 }

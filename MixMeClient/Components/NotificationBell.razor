@@ -1,0 +1,295 @@
+﻿@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+
+<div class="bell-container">
+    @* Сама иконка колокольчика *@
+    <div class="bell-icon-wrapper @(unreadCount > 0 ? "pulse" : "")" @onclick="ToggleDropdown">
+        <i class="bi bi-bell"></i>
+        @if (unreadCount > 0)
+        {
+            <span class="badge-count">@unreadCount</span>
+        }
+    </div>
+
+    @if (showDropdown)
+    {
+        <div class="notif-menu fade-in">
+            <div class="notif-header">
+                <span class="title">Уведомления</span>
+                @if (notifications.Any())
+                {
+                    <button class="clear-all-btn" @onclick="ClearAll">Очистить всё</button>
+                }
+            </div>
+
+            <div class="notif-scroll-area scroll-styled">
+                @if (notifications == null || !notifications.Any())
+                {
+                    <div class="empty-state">
+                        <i class="bi bi-mailbox"></i>
+                        <p>Новых уведомлений нет</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var n in notifications)
+                    {
+                        <div class="notif-card @(n.IsRead ? "" : "unread")" @onclick="() => HandleClick(n)">
+                            <div class="notif-indicator"></div>
+                            <div class="notif-content">
+                                <div class="notif-text">@n.Text</div>
+                                <div class="notif-date">@FormatDate(n.CreatedAt)</div>
+                            </div>
+                            @if (!n.IsRead)
+                            {
+                                <i class="bi bi-circle-fill unread-dot"></i>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@* Зона для закрытия по клику вне меню *@
+@if (showDropdown)
+{
+    <div class="click-overlay" @onclick="() => showDropdown = false"></div>
+}
+
+<style>
+    .bell-container {
+        position: relative;
+        z-index: 1000;
+    }
+
+    .bell-icon-wrapper {
+        font-size: 1.4rem;
+        color: rgba(255,255,255,0.6);
+        cursor: pointer;
+        transition: 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+    }
+
+        .bell-icon-wrapper:hover {
+            color: #E91E63;
+            background: rgba(255,255,255,0.05);
+        }
+
+    .badge-count {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: #E91E63;
+        color: white;
+        font-size: 0.6rem;
+        font-weight: 900;
+        min-width: 16px;
+        height: 16px;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #0B0B0B;
+    }
+
+    /* МЕНЮ УВЕДОМЛЕНИЙ */
+    .notif-menu {
+        position: absolute;
+        top: 55px;
+        right: 0;
+        width: 340px;
+        background: rgba(20, 20, 20, 0.98);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 22px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+        overflow: hidden;
+        z-index: 1001;
+    }
+
+    .notif-header {
+        padding: 18px 22px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .notif-header .title {
+            font-weight: 800;
+            font-size: 0.9rem;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+    .clear-all-btn {
+        background: transparent;
+        border: none;
+        color: #E91E63;
+        font-size: 0.75rem;
+        font-weight: 700;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: 0.2s;
+    }
+
+        .clear-all-btn:hover {
+            opacity: 1;
+        }
+
+    .notif-scroll-area {
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    /* КАРТОЧКА УВЕДОМЛЕНИЯ */
+    .notif-card {
+        display: flex;
+        gap: 12px;
+        padding: 15px;
+        border-radius: 16px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: 0.2s;
+        background: rgba(255,255,255,0.02);
+        position: relative;
+    }
+
+        .notif-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: scale(1.02);
+        }
+
+        .notif-card.unread {
+            background: rgba(233, 30, 99, 0.04);
+        }
+
+    .notif-content {
+        flex-grow: 1;
+    }
+
+    .notif-text {
+        color: #eee;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        font-weight: 500;
+        margin-bottom: 4px;
+    }
+
+    .notif-date {
+        color: rgba(255,255,255,0.3);
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .unread-dot {
+        color: #E91E63;
+        font-size: 0.5rem;
+        align-self: center;
+        margin-left: 5px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: rgba(255,255,255,0.2);
+    }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+    .click-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+    }
+
+    /* АНИМАЦИЯ ПУЛЬСАЦИИ */
+    .pulse.has-unread {
+        animation: bell-pulse 2s infinite;
+    }
+
+    @@keyframes bell-pulse {
+        0% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.1);
+            color: #E91E63;
+        }
+
+        100% {
+            transform: scale(1);
+        }
+    }
+</style>
+
+@code {
+    private List<Notification> notifications = new();
+    private int unreadCount => notifications.Count(n => !n.IsRead);
+    private bool showDropdown = false;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        if (Auth.User == null) return;
+        try
+        {
+            notifications = await Http.GetFromJsonAsync<List<Notification>>($"{BaseApiUrl}/api/notifications/user/{Auth.User.Id}") ?? new();
+        }
+        catch { }
+    }
+
+    private void ToggleDropdown() { showDropdown = !showDropdown; }
+
+    private async Task HandleClick(Notification n)
+    {
+        if (!n.IsRead)
+        {
+            await Http.PatchAsync($"{BaseApiUrl}/api/notifications/{n.Id}/read", null);
+            n.IsRead = true;
+        }
+        showDropdown = false;
+        if (!string.IsNullOrEmpty(n.Link)) Nav.NavigateTo(n.Link);
+    }
+
+    private async Task ClearAll()
+    {
+        if (Auth.User == null) return;
+        var res = await Http.DeleteAsync($"{BaseApiUrl}/api/notifications/user/{Auth.User.Id}/clear");
+        if (res.IsSuccessStatusCode)
+        {
+            notifications.Clear();
+            showDropdown = false;
+        }
+    }
+
+    private string FormatDate(DateTime dt)
+    {
+        dt = dt.ToLocalTime();
+        var now = DateTime.Now;
+        if (dt.Date == now.Date) return $"Сегодня, {dt:HH:mm}";
+        return dt.ToString("dd MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+    }
+}
