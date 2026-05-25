@@ -35,38 +35,62 @@ public class OrdersController : ControllerBase
             EngineerId = dto.EngineerId,
             ServiceId = dto.ServiceId,
             TotalAmount = dto.TotalAmount,
-            Status = "WaitingForConfirmation", // Начальный статус: инженер должен проверить
+            Status = "WaitingForConfirmation",
             CreatedAt = DateTime.UtcNow
         };
 
         _context.Orders.Add(newOrder);
 
+        // Получаем данные участников для формирования текста
+        var engineer = await _context.Profiles.FindAsync(dto.EngineerId);
+        var customer = await _context.Profiles.FindAsync(dto.CustomerId);
         var service = await _context.Services.FindAsync(dto.ServiceId);
         string serviceName = service?.Name ?? "Индивидуальное предложение";
 
+        // --- ОПРЕДЕЛЯЕМ, КОМУ ИДЕТ УВЕДОМЛЕНИЕ ---
+        // В твоей системе сейчас CreateOrder вызывается и заказчиком, и инженером.
+        // Мы можем определить инициатора по контексту или ролям. 
+        // Для универсальности сделаем так: отправим уведомление "Партнеру".
+
         // 1. Системное сообщение в чат
-        string content = $"🤖 Проект '{serviceName}' создан. Инженер изучает исходники перед подтверждением.";
+        string chatContent = $"🤖 Проект '{serviceName}' создан. Ожидается подтверждение условий участниками.";
         _context.Messages.Add(new Message
         {
             OrderId = newOrder.Id,
             SenderId = Guid.Empty,
-            Content = content,
+            Content = chatContent,
             SentAt = DateTime.UtcNow
         });
 
-        // 2. Уведомление в БД для инженера (чтобы он увидел колокольчик)
-        _context.Notifications.Add(new MixMeShared.Notification
+        // 2. Логика уведомления в колокольчик (Notification)
+        // Нам нужно понять, КТО вызвал этот метод. 
+        // Обычно в токене лежит ID текущего пользователя.
+        var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        Guid initiatorId = Guid.TryParse(currentUserIdStr, out var g) ? g : Guid.Empty;
+
+        // Определяем получателя (тот, кто НЕ инициировал заказ)
+        Guid recipientId = (initiatorId == dto.EngineerId) ? dto.CustomerId : dto.EngineerId;
+        string senderName = (initiatorId == dto.EngineerId) ? (engineer?.Username ?? "Инженер") : (customer?.Username ?? "Заказчик");
+
+        string notifText = (initiatorId == dto.EngineerId)
+            ? $"✉️ Инженер {senderName} предложил вам проект: {serviceName}"
+            : $"📩 Новый запрос от {senderName} на услугу: {serviceName}";
+
+        var notification = new MixMeShared.Notification
         {
-            UserId = dto.EngineerId,
-            Text = $"📩 Новый запрос на проект: {serviceName}. Требуется ваше подтверждение.",
+            UserId = recipientId,
+            Text = notifText,
             Link = $"/order/{newOrder.Id}",
             CreatedAt = DateTime.UtcNow
-        });
+        };
+        _context.Notifications.Add(notification);
 
         await _context.SaveChangesAsync();
 
-        // 3. SignalR: оповещаем инженера мгновенно
-        await _hubContext.Clients.Group(dto.EngineerId.ToString()).SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", content);
+        // 3. SignalR: Отправляем мгновенный сигнал получателю
+        // Чтобы у него сразу выскочил Toast и загорелся колокольчик
+        await _hubContext.Clients.Group(recipientId.ToString())
+            .SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", notifText);
 
         return Ok(newOrder.Id);
     }
