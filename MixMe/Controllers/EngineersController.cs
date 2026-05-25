@@ -79,6 +79,38 @@ public class EngineersController : ControllerBase
             .ToListAsync();
         return Ok(top);
     }
+
+    [HttpGet("{profileId}/stats")]
+    public async Task<ActionResult<EngineerStatsDto>> GetStats(Guid profileId)
+    {
+        var orders = await _context.Orders
+            .Where(o => o.EngineerId == profileId && o.Status == "Completed")
+            .OrderByDescending(o => o.CompletedAt)
+            .ToListAsync();
+
+        var engineer = await _context.Engineers.FirstOrDefaultAsync(e => e.ProfileId == profileId);
+
+        var stats = new EngineerStatsDto
+        {
+            TotalProjects = orders.Count,
+            AvgRating = engineer?.AvgRating ?? 0,
+            ExperienceYears = engineer?.ExperienceYears ?? 0,
+            IncomeHistory = orders
+                .Where(o => o.CompletedAt.HasValue)
+                .GroupBy(o => new { o.CompletedAt.Value.Year, o.CompletedAt.Value.Month })
+                .Select(g => new MonthlyIncomeDto
+                {
+                    MonthName = new DateTime(g.Key.Year, g.Key.Month, 1).ToString("MMMM yyyy"),
+                    Amount = g.Sum(o => o.TotalAmount),
+                    Count = g.Count()
+                })
+                .Take(6) // Последние 6 месяцев
+                .ToList()
+        };
+
+        return Ok(stats);
+    }
+
     [HttpGet("search")]
     public async Task<ActionResult<IEnumerable<object>>> SearchEngineers(
     [FromQuery] string? query,
@@ -86,6 +118,7 @@ public class EngineersController : ControllerBase
     [FromQuery] decimal? minPrice,
     [FromQuery] decimal? maxPrice, // Добавили макс. цену
     [FromQuery] int? minExperience, // Добавили опыт
+    [FromQuery] double? minRating,
     [FromQuery] string? sortBy = "rating") // Сортировка: rating, price_asc, price_desc, experience
     {
         var engineersQuery = _context.Engineers
@@ -94,9 +127,18 @@ public class EngineersController : ControllerBase
             .AsQueryable();
 
         // Фильтры
-        if (!string.IsNullOrEmpty(query)) engineersQuery = engineersQuery.Where(e => e.Profile.Username.Contains(query) || e.Bio.Contains(query));
-        if (genreId.HasValue) engineersQuery = engineersQuery.Where(e => e.Genres.Any(g => g.Id == genreId));
-        if (minExperience.HasValue) engineersQuery = engineersQuery.Where(e => e.ExperienceYears >= minExperience.Value);
+        if (!string.IsNullOrEmpty(query))
+            engineersQuery = engineersQuery.Where(e => e.Profile.Username.Contains(query) || e.Bio.Contains(query));
+
+        if (genreId.HasValue)
+            engineersQuery = engineersQuery.Where(e => e.Genres.Any(g => g.Id == genreId));
+
+        if (minExperience.HasValue)
+            engineersQuery = engineersQuery.Where(e => e.ExperienceYears >= minExperience.Value);
+
+        // 2. ДОБАВИЛИ ФИЛЬТРАЦИЮ ПО РЕЙТИНГУ
+        if (minRating.HasValue)
+            engineersQuery = engineersQuery.Where(e => e.AvgRating >= minRating.Value);
 
         var engineers = await engineersQuery.ToListAsync();
         var result = new List<dynamic>();

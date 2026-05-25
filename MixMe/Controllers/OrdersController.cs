@@ -121,15 +121,9 @@ public class OrdersController : ControllerBase
         if (order.CustomerId != currentUserId && order.EngineerId != currentUserId)
             return StatusCode(403);
 
-        var customerName = await _context.Profiles
-            .Where(p => p.Id == order.CustomerId)
-            .Select(p => p.Username)
-            .FirstOrDefaultAsync();
-
-        var engineerName = await _context.Profiles
-            .Where(p => p.Id == order.EngineerId)
-            .Select(p => p.Username)
-            .FirstOrDefaultAsync();
+        // Определяем, кто наш оппонент
+        var partnerId = (currentUserId == order.CustomerId) ? order.EngineerId : order.CustomerId;
+        var partner = await _context.Profiles.FindAsync(partnerId);
 
         return Ok(new
         {
@@ -138,7 +132,12 @@ public class OrdersController : ControllerBase
             TotalAmount = order.TotalAmount,
             CustomerId = order.CustomerId,
             EngineerId = order.EngineerId,
-            PartnerName = (currentUserId == order.CustomerId) ? engineerName : customerName,
+
+            // Добавляем эти поля:
+            PartnerId = partnerId,
+            PartnerName = partner?.Username ?? "Партнер",
+            PartnerAvatar = partner?.AvatarUrl,
+
             ServiceName = _context.Services
                 .Where(s => s.Id == order.ServiceId)
                 .Select(s => s.Name)
@@ -171,6 +170,7 @@ public class OrdersController : ControllerBase
         }
         else if (newStatus == "Completed")
         {
+            order.CompletedAt = DateTime.UtcNow;
             _context.Notifications.Add(new Notification
             {
                 UserId = order.EngineerId,

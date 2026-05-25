@@ -50,7 +50,7 @@
                         </div>
                     </nav>
                     <div class="user-controls">
-                        <NotificationBell />
+                        <NotificationBell @ref="notifBell" />
                         <div class="search-trigger" @onclick='() => Nav.NavigateTo("/search")'>
                             <i class="bi bi-search"></i>
                         </div>
@@ -86,7 +86,9 @@
                     <span class="toast-title">Новое сообщение</span>
                     <p>@lastNotification</p>
                 </div>
-                <button class="toast-close" @onclick:stopPropagation @onclick="() => lastNotification = null">&times;</button>
+                <button class="toast-close" @onclick:stopPropagation @onclick="() => lastNotification = null">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
         }
     }
@@ -182,6 +184,35 @@
             box-shadow: 0 0 0 0 rgba(255, 71, 71, 0);
         }
     }
+
+    .toast-close {
+        background: rgba(255, 255, 255, 0.05); /* Почти прозрачный фон */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.4); /* Тусклый цвет в обычном состоянии */
+        width: 32px;
+        height: 32px;
+        border-radius: 50%; /* Делаем круглым */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-left: 10px;
+        outline: none;
+    }
+
+        .toast-close:hover {
+            background: #E91E63; /* Твой фирменный розовый при наведении */
+            border-color: #E91E63;
+            color: white;
+            transform: rotate(90deg) scale(1.1); /* Красивый эффект поворота */
+        }
+
+        /* Опционально: убери стандартную рамку фокуса в Chrome */
+        .toast-close:focus {
+            box-shadow: none;
+        }
 
     /* НАВИГАЦИЯ И ВЫРАВНИВАНИЕ */
     .top-nav {
@@ -309,15 +340,18 @@
 @code {
     private string BaseApiUrl = "https://localhost:7237";
     private HubConnection? hubConnection;
+    private MixMeClient.Components.NotificationBell? notifBell;
     private string? lastNotification;
     private string? lastNotificationOrderId;
     private bool hasNewMessageNotification = false;
     private bool hasNewProjectNotification = false;
     private bool isReady = false;
+    
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += HandleLocationChanged;
+        Auth.OnLoginStateChanged += async () => await StartGlobalNotificationHub();
         await Auth.InitializeAsync();
         isReady = true;
         if (Auth.IsLoggedIn)
@@ -337,20 +371,27 @@
                 .WithAutomaticReconnect()
                 .Build();
 
-            hubConnection.On<string, string, string>("ReceiveMessage", (orderId, user, message) =>
-            {
-                bool isNotMe = user != Auth.User?.Username;
-                bool isNotCurrentPage = !Nav.Uri.Contains($"/order/{orderId}");
+            hubConnection.On<string, string, string>("ReceiveMessage", async (orderId, user, message) =>
+     {
+     bool isNotMe = user != Auth.User?.Username;
+     bool isNotCurrentPage = !Nav.Uri.Contains($"/order/{orderId}");
 
-                if (isNotMe && isNotCurrentPage)
-                {
-                    lastNotification = $"{user}: {message}";
-                    lastNotificationOrderId = orderId;
-                    hasNewMessageNotification = true;
-                    if (user == "Система" || user == "🤖") hasNewProjectNotification = true;
-                    InvokeAsync(StateHasChanged);
-                }
-            });
+     if (isNotMe && isNotCurrentPage)
+     {
+         lastNotification = $"{user}: {message}";
+         lastNotificationOrderId = orderId;
+         hasNewMessageNotification = true;
+         if (user == "Система" || user == "🤖") hasNewProjectNotification = true;
+
+         // ДОБАВЬ ЭТУ ПРОВЕРКУ И ВЫЗОВ ТУТ:
+         if (notifBell != null)
+         {
+             await notifBell.Refresh();
+         }
+
+         await InvokeAsync(StateHasChanged);
+     }
+     });
 
             await hubConnection.StartAsync();
 
@@ -380,9 +421,30 @@
 
     private void GoToNotification() { if (!string.IsNullOrEmpty(lastNotificationOrderId)) Nav.NavigateTo($"/order/{lastNotificationOrderId}"); lastNotification = null; }
 
-    private bool ShowNavigation() { var rel = Nav.ToBaseRelativePath(Nav.Uri).ToLower(); return !(string.IsNullOrEmpty(rel) || rel.Contains("login") || rel.Contains("register")); }
+    private bool ShowNavigation()
+    {
+        // Получаем относительный путь (например, "feed" или "?step=2")
+        var relativePath = Nav.ToBaseRelativePath(Nav.Uri);
+
+        // Отрезаем параметры запроса, чтобы получить только чистый путь
+        // Разделяем строку по знаку '?' и берем первую часть
+        var pathOnly = relativePath.Split('?')[0].ToLower();
+
+        // Панель скрыта, если:
+        // 1. Путь пустой (главная страница лендинга)
+        // 2. Путь содержит "login"
+        // 3. Путь содержит "register"
+        return !(string.IsNullOrEmpty(pathOnly) ||
+                 pathOnly.Contains("login") ||
+                 pathOnly.Contains("register"));
+    }
 
     private string GetFullUrl(string? url) => string.IsNullOrEmpty(url) ? "" : (url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}");
 
-    public async ValueTask DisposeAsync() { Nav.LocationChanged -= HandleLocationChanged; if (hubConnection != null) await hubConnection.DisposeAsync(); }
+    public async ValueTask DisposeAsync()
+    {
+        Nav.LocationChanged -= HandleLocationChanged;
+        Auth.OnLoginStateChanged -= async () => await StartGlobalNotificationHub(); // ОТПИСКА
+        if (hubConnection != null) await hubConnection.DisposeAsync();
+    }
 }

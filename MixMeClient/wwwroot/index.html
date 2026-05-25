@@ -100,7 +100,15 @@
     <script>
         window.scrollToBottom = (elementId) => {
             const el = document.getElementById(elementId);
-            if (el) { el.scrollTop = el.scrollHeight; }
+            if (el) {
+                // Используем setTimeout 0, чтобы гарантированно попасть в конец очереди выполнения
+                setTimeout(() => {
+                    el.scrollTo({
+                        top: el.scrollHeight,
+                        behavior: 'smooth' // Добавим плавность, если хотите (или 'auto' для мгновенного)
+                    });
+                }, 50);
+            }
         };
     </script>
 </body>

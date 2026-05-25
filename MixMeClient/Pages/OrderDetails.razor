@@ -190,8 +190,19 @@
             @* --- ПРАВАЯ КОЛОНКА: ЧАТ --- *@
             <section class="chat-panel glass-box">
                 <div class="chat-header">
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="chat-ava-mini"><i class="bi bi-person-circle"></i></div>
+                    @* Кликабельная зона для перехода в профиль *@
+                    <div class="d-flex align-items-center gap-3" @onclick="GoToPartnerProfile" style="cursor: pointer;">
+                        <div class="chat-ava-mini">
+                            @if (string.IsNullOrEmpty(order.PartnerAvatar))
+                            {
+                                <i class="bi bi-person-circle"></i>
+                            }
+                            else
+                            {
+                                <img src="@GetFullUrl(order.PartnerAvatar)"
+                                     style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+                            }
+                        </div>
                         <div>
                             <div class="chat-with-label">Проектный чат</div>
                             <div class="chat-partner-name">@order.PartnerName</div>
@@ -244,20 +255,22 @@
     .order-details-layout {
         position: fixed;
         inset: 70px 0 0 0;
-        padding: 40px 5%;
-        overflow-y: auto; /* ЗАМЕНИТЬ hidden на auto */
+        padding: 20px 5%;
+        overflow: hidden; /* Убираем общий скролл страницы */
+        display: flex;
+        justify-content: center;
     }
 
+    /* 2. Сетка занимает всю доступную высоту */
     .details-grid {
         display: grid;
         grid-template-columns: 380px 1fr;
         gap: 30px;
-        /* УДАЛИТЬ height: 100% */
-        height: auto;
+        width: 100%;
         max-width: 1400px;
-        margin: 0 auto;
-        padding-bottom: 50px; /* Чтобы футер не прилипал к низу */
+        height: calc(100vh - 110px); /* Высота за вычетом отступов */
     }
+
 
     .glass-box {
     background: rgba(255,255,255,0.03);
@@ -312,16 +325,25 @@
     }
 
     /* Чат */
+    .info-panel {
+        overflow-y: auto;
+        padding-right: 10px;
+        height: 100%;
+    }
+
+    /* 4. Чат-панель превращается в гибкий контейнер */
     .chat-panel {
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%; /* Важно! */
+        padding: 0;
+        overflow: hidden;
     }
 
     .chat-header {
-    padding: 20px 30px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+        flex-shrink: 0; /* Шапка не сжимается */
+        padding: 20px 30px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
     }
 
     .chat-with-label {
@@ -337,12 +359,12 @@
     }
 
     .messages-area {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 30px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+        flex-grow: 1; /* Занимает всё свободное место между шапкой и вводом */
+        overflow-y: auto;
+        padding: 30px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
     }
 
     .message-bubble {
@@ -382,31 +404,62 @@
     }
 
     .chat-input-zone {
-    padding: 20px;
-    background: rgba(0,0,0,0.2);
-    display: flex;
-    gap: 15px;
+        flex-shrink: 0;
+        padding: 20px 30px;
+        background: rgba(0,0,0,0.3);
+        display: flex; /* Обязательно */
+        gap: 15px;
+        align-items: center;
+        border-top: 1px solid rgba(255,255,255,0.05);
     }
 
-    .chat-input-zone textarea {
-    flex-grow: 1;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 15px;
-    color: white;
-    padding: 12px;
-    resize: none;
-    height: 50px;
-    outline: none;
-    }
+        .chat-input-zone textarea {
+            flex-grow: 1;
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            border-radius: 18px !important;
+            color: white !important;
+            padding: 14px 20px !important;
+            height: 54px !important; /* Фиксированная высота для аккуратности */
+            min-height: 54px;
+            max-height: 150px;
+            resize: none !important;
+            outline: none !important;
+            font-size: 0.95rem;
+            transition: 0.2s;
+        }
+
+            .chat-input-zone textarea:focus {
+                border-color: #E91E63 !important;
+                background: rgba(255,255,255,0.08) !important;
+            }
 
     .btn-send {
-    background: #E91E63;
-    color: white;
-    border: none;
-    width: 50px;
-    border-radius: 15px;
+        width: 54px;
+        height: 54px;
+        background: #E91E63;
+        color: white;
+        border: none;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: 0.3s;
+        flex-shrink: 0; /* Чтобы кнопка не сжималась */
+        box-shadow: 0 5px 15px rgba(233, 30, 99, 0.2);
     }
+
+        .btn-send:hover:not(:disabled) {
+            transform: scale(1.05);
+            background: #ff2e75;
+            box-shadow: 0 8px 20px rgba(233, 30, 99, 0.4);
+        }
+
+        .btn-send:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
 
     /* Кнопки */
     .btn-pay-now {
@@ -701,6 +754,26 @@
         display: flex;
         align-items: center;
     }
+    /* Контейнер для маленькой аватарки в шапке чата */
+    .chat-ava-mini {
+        width: 50px; /* Жестко задаем ширину */
+        height: 50px; /* Жестко задаем высоту */
+        border-radius: 50%; /* Делаем круглым */
+        overflow: hidden; /* Обрезаем всё, что выходит за границы круга */
+        background: #222; /* Цвет фона, если картинка грузится */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0; /* Запрещаем сжиматься, если текста много */
+        border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+        /* Сама картинка внутри контейнера */
+        .chat-ava-mini img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Сохраняем пропорции, обрезая лишнее */
+        }
 </style>
 
 @code {
@@ -721,11 +794,13 @@
     private bool isReviewSubmitted = false;
     private bool isSavingReview = false;
 
+    private bool _shouldScrollToBottom = false;
+
     private async Task ScrollToBottom()
     {
         try
         {
-            await Task.Delay(150);
+            
             await JS.InvokeVoidAsync("scrollToBottom", "msgContainer");
         }
         catch (Exception ex) { Console.WriteLine($"Ошибка скролла: {ex.Message}"); }
@@ -742,11 +817,16 @@
 
             hubConnection.On<string, string, string>("ReceiveMessage", async (orderId, user, message) =>
             {
+                // Если сообщение пришло от другого пользователя (не от нас)
                 if (user != Auth.User?.Username)
                 {
                     chatMessages.Add(new ChatMessage { User = user, Text = message });
+
+                    // Устанавливаем флаг: прокрутить вниз после отрисовки нового сообщения
+                    _shouldScrollToBottom = true;
+
+                    // Используем InvokeAsync, чтобы безопасно обновить UI из потока SignalR
                     await InvokeAsync(StateHasChanged);
-                    await ScrollToBottom();
                 }
             });
 
@@ -759,6 +839,8 @@
         }
     }
 
+    
+
     protected override async Task OnParametersSetAsync()
     {
         if (OrderId != Guid.Empty)
@@ -767,6 +849,16 @@
             errorMessage = null;
             await LoadAllData();
             isInitialLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Если флаг установлен — значит мы только что загрузили данные или отправили сообщение
+        if (_shouldScrollToBottom)
+        {
+            _shouldScrollToBottom = false; // Сразу сбрасываем, чтобы не скроллило бесконечно
+            await ScrollToBottom(); // Вызываем ваш JS метод
         }
     }
 
@@ -804,29 +896,26 @@
                                 Text = m.Content,
                                 Time = m.SentAt
                             }).ToList();
-
-                        await ScrollToBottom();
                     }
 
-                    // 4. Подключаемся к группе SignalR для получения сообщений в реальном времени
+                    // 4. Подключаемся к SignalR
                     if (hubConnection?.State == HubConnectionState.Connected)
                     {
                         await hubConnection.SendAsync("JoinOrderGroup", OrderId.ToString());
                     }
 
-                    // 5. ПРОВЕРКА ОТЗЫВА (Теперь работает благодаря миграции и обновленному контроллеру)
+                    // 5. Проверка отзыва
                     if (Auth.User.RoleId == 1 && order.Status == "Completed")
                     {
-                        // Загружаем все отзывы данного инженера
                         var reviews = await Http.GetFromJsonAsync<List<Review>>($"{BaseApiUrl}/api/Reviews/engineer/{order.EngineerId}");
-
                         if (reviews != null)
                         {
-                            // Ищем, есть ли среди них отзыв с ID текущего заказа
-                            // Теперь r.OrderId существует в классе Review и в базе данных
                             isReviewSubmitted = reviews.Any(r => r.OrderId == OrderId);
                         }
                     }
+
+                    // УСТАНАВЛИВАЕМ ФЛАГ ДЛЯ СКРОЛЛА
+                    _shouldScrollToBottom = true;
                 }
             }
             else
@@ -838,6 +927,11 @@
         {
             errorMessage = "Произошла ошибка при загрузке данных.";
             Console.WriteLine($"LoadAllData Error: {ex.Message}");
+        }
+        finally
+        {
+            isInitialLoading = false;
+            StateHasChanged(); // Просим Blazor перерисовать страницу (убрать лоадер и показать чат)
         }
     }
 
@@ -852,21 +946,41 @@
                 {
                     OrderId = order.Id,
                     ReviewerId = Auth.User!.Id,
-                    RevieweeId = order.EngineerId, // Берем из модели
+                    RevieweeId = order.EngineerId,
                     Rating = reviewRating,
                     Comment = reviewComment
                 };
 
             var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/Reviews", review);
+
             if (res.IsSuccessStatusCode)
             {
                 isReviewSubmitted = true;
                 await JS.InvokeVoidAsync("alert", "Спасибо! Ваш отзыв опубликован.");
             }
-            else { await JS.InvokeVoidAsync("alert", "Ошибка при отправке отзыва."); }
+            else
+            {
+                // Читаем текст ошибки от сервера
+                var errorText = await res.Content.ReadAsStringAsync();
+                if (errorText.Contains("уже оставили отзыв"))
+                {
+                    isReviewSubmitted = true; // Скрываем форму, так как в БД он уже есть
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync("alert", "Ошибка при отправке отзыва.");
+                }
+            }
         }
-        catch (Exception ex) { Console.WriteLine(ex.Message); }
-        finally { isSavingReview = false; }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSavingReview = false;
+            StateHasChanged(); // Принудительно перерисовываем UI, чтобы убрать блок
+        }
     }
 
     private async Task UploadOrderFile(InputFileChangeEventArgs e)
@@ -971,6 +1085,11 @@
         }
     }
 
+    private void GoToPartnerProfile()
+    {
+        if (order != null) Nav.NavigateTo($"/profile/{order.PartnerId}");
+    }
+
     private async Task SendMessage()
     {
         if (string.IsNullOrWhiteSpace(newMessage) || order == null) return;
@@ -981,12 +1100,18 @@
 
             if (res.IsSuccessStatusCode)
             {
+                // Отправляем через SignalR другим участникам
                 if (hubConnection?.State == HubConnectionState.Connected)
                     await hubConnection.SendAsync("SendMessage", OrderId.ToString(), Auth.User!.Username, newMessage);
 
+                // Добавляем в локальный список сообщений
                 chatMessages.Add(new ChatMessage { User = Auth.User.Username, Text = newMessage });
-                newMessage = "";
-                await ScrollToBottom();
+                newMessage = ""; // Очищаем поле ввода
+
+                // СТАВИМ ФЛАГ ДЛЯ СКРОЛЛА
+                _shouldScrollToBottom = true;
+
+                StateHasChanged(); // Запускаем перерисовку (OnAfterRenderAsync сработает сразу после этого)
             }
         }
         catch (Exception ex) { Console.WriteLine($"SendMessage Error: {ex.Message}"); }
@@ -1049,8 +1174,13 @@
         public Guid Id { get; set; }
         public string Status { get; set; } = "";
         public decimal TotalAmount { get; set; }
-        public Guid CustomerId { get; set; } // Добавлено
-        public Guid EngineerId { get; set; } // Добавлено
+        public Guid CustomerId { get; set; }
+        public Guid EngineerId { get; set; }
+
+        // Новые поля:
+        public Guid PartnerId { get; set; }
+        public string? PartnerAvatar { get; set; }
+
         public string PartnerName { get; set; } = "";
         public string ServiceName { get; set; } = "";
         public string? PaymentId { get; set; }

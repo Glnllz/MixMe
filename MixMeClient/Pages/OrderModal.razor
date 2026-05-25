@@ -29,7 +29,7 @@
                             <div class="service-item @(selectedService?.Id == s.Id ? "active" : "")"
                                  @onclick="() => selectedService = s">
                                 <div class="s-info">
-                                    <span class="name">@s.Name</span>
+                                    <span class="name" title="@s.Name">@s.Name</span>
                                     <i class="bi bi-check-circle-fill check-icon"></i>
                                 </div>
                                 <span class="price">@s.Price.ToString("N0") ₽</span>
@@ -131,8 +131,8 @@
 
     .service-item {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        justify-content: space-between; /* Текст слева, цена справа */
+        align-items: center; /* Выравнивание по центру высоты */
         padding: 18px 22px;
         background: rgba(255,255,255,0.03);
         border: 1px solid rgba(255,255,255,0.06);
@@ -140,6 +140,7 @@
         cursor: pointer;
         transition: 0.2s;
         margin-bottom: 12px;
+        gap: 15px; /* Минимальный зазор между текстом и ценой */
     }
 
         .service-item:hover {
@@ -157,11 +158,16 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        flex: 1; /* Занимает всё доступное место */
+        min-width: 0; /* Важно: позволяет тексту обрезаться или сжиматься, не распирая контейнер */
     }
 
     .service-item .name {
         font-weight: 700;
         color: white;
+        white-space: nowrap; /* Запрещаем перенос названия */
+        overflow: hidden; /* Прячем то, что не влезло */
+        text-overflow: ellipsis; /* Добавляем троеточие в конце, если имя слишком длинное */
     }
 
     .check-icon {
@@ -181,6 +187,8 @@
         color: #00bcd4;
         font-weight: 900;
         font-size: 1.1rem;
+        white-space: nowrap; /* ЦЕНА НИКОГДА НЕ ПЕРЕНОСИТСЯ */
+        flex-shrink: 0; /* Запрещаем цене сжиматься */
     }
 
     .btn-confirm {
@@ -237,30 +245,45 @@
     private MusicService? selectedService;
     private string BaseApiUrl = "https://localhost:7237";
 
-    public async Task Show()
+    // ИЗМЕНЕНО: Теперь метод принимает параметры напрямую
+    public async Task Show(Guid engineerId, string engineerName)
     {
-        IsVisible = true;
-        services = new(); // Сбрасываем старые данные
-        isLoadingServices = true; // Показываем лоадер
+        // 1. СБРОС СОСТОЯНИЯ (самое важное)
+        services = new List<MusicService>(); // Очищаем старый список
+        selectedService = null;              // Снимаем выделение
+        EngineerId = engineerId;             // Устанавливаем нового инженера
+        EngineerName = engineerName;
 
-        // ПЕРВЫЙ ВЫЗОВ: чтобы Blazor сразу отрисовал открытую модалку со спиннером
+        IsVisible = true;
+        isLoadingServices = true;
+
+        // 2. Принудительное обновление интерфейса, чтобы показать лоадер и очистить список
         StateHasChanged();
 
         try
         {
-            services = await Http.GetFromJsonAsync<List<MusicService>>($"{BaseApiUrl}/api/services/engineer/{EngineerId}") ?? new();
+            // 3. Загрузка новых данных
+            var result = await Http.GetFromJsonAsync<List<MusicService>>($"{BaseApiUrl}/api/services/engineer/{EngineerId}");
+            services = result ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки услуг: {ex.Message}");
         }
         finally
         {
             isLoadingServices = false;
-            // ВТОРОЙ ВЫЗОВ: чтобы Blazor убрал спиннер и показал список
-            StateHasChanged();
+            StateHasChanged(); // Показываем загруженные услуги
         }
     }
 
     public void Close()
     {
-        if (!isCreating) IsVisible = false;
+        if (!isCreating)
+        {
+            IsVisible = false;
+            services = new List<MusicService>(); // Очищаем при закрытии на всякий случай
+        }
     }
 
     private async Task ConfirmOrder()

@@ -9,6 +9,7 @@ public class AuthService
 {
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
+    public event Action? OnLoginStateChanged;
     public UserProfile? User { get; private set; }
     public bool IsLoggedIn => User != null;
 
@@ -22,11 +23,12 @@ public class AuthService
     public async Task Login(string token, UserProfile user)
     {
         User = user;
-        // Сохраняем токен отдельно
         await _js.InvokeVoidAsync("localStorage.setItem", "authToken", token);
-        // Сохраняем данные профиля
         var json = JsonSerializer.Serialize(user);
         await _js.InvokeVoidAsync("localStorage.setItem", "currentUser", json);
+
+        // ВЫЗЫВАЕМ СОБЫТИЕ
+        OnLoginStateChanged?.Invoke();
     }
 
     // Загрузка пользователя при старте приложения
@@ -37,6 +39,12 @@ public class AuthService
         {
             User = JsonSerializer.Deserialize<UserProfile>(json);
         }
+    }
+    public async Task UpdateUser(UserProfile user)
+    {
+        User = user;
+        var json = JsonSerializer.Serialize(user);
+        await _js.InvokeVoidAsync("localStorage.setItem", "currentUser", json);
     }
 
     // Выход

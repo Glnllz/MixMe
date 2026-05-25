@@ -13,6 +13,7 @@ public class Order
     // ЮKassa нюансы
     public string? PaymentId { get; set; } // ID от ЮKassa
     public string? PaymentStatus { get; set; } // Статус от ЮKassa (pending, waiting_for_capture, succeeded)
-
+    public DateTime? CompletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
 }

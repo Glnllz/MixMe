@@ -1,6 +1,7 @@
 ﻿@page "/"
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject MixMeClient.Services.AuthService Auth
 
 <BackgroundGlow />
 
@@ -524,7 +525,15 @@
     {
         if (step == "2") currentStep = 2;
     }
-
+    protected override void OnInitialized()
+    {
+        // Если сервис авторизации говорит, что пользователь уже вошел (из localStorage),
+        // сразу перенаправляем его в основную часть приложения.
+        if (Auth.IsLoggedIn)
+        {
+            Nav.NavigateTo("/feed");
+        }
+    }
     private void HandleMouseMove(MouseEventArgs e)
     {
         mouseX = e.ClientX - (1920 / 2);

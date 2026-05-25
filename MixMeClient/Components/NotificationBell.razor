@@ -292,4 +292,9 @@
         if (dt.Date == now.Date) return $"Сегодня, {dt:HH:mm}";
         return dt.ToString("dd MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
     }
+    public async Task Refresh()
+    {
+        await LoadData();
+        StateHasChanged();
+    }
 }

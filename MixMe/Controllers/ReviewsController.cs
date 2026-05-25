@@ -47,13 +47,23 @@ public class ReviewsController : ControllerBase
         return Ok();
     }
 
+    // MixMe/Controllers/ReviewsController.cs
+
     [HttpGet("engineer/{engineerId}")]
-    public async Task<ActionResult<IEnumerable<Review>>> GetEngineerReviews(Guid engineerId)
+    public async Task<ActionResult<IEnumerable<object>>> GetEngineerReviews(Guid engineerId)
     {
-        // Теперь метод стал очень простым, так как имя уже в таблице
         return await _context.Reviews
             .Where(r => r.RevieweeId == engineerId)
             .OrderByDescending(r => r.CreatedAt)
+            .Select(r => new {
+                OrderId = r.OrderId, // ОБЯЗАТЕЛЬНО ДОБАВЬТЕ ЭТУ СТРОКУ
+                ReviewerId = r.ReviewerId,
+                ReviewerName = _context.Profiles.Where(p => p.Id == r.ReviewerId).Select(p => p.Username).FirstOrDefault(),
+                ReviewerAvatarUrl = _context.Profiles.Where(p => p.Id == r.ReviewerId).Select(p => p.AvatarUrl).FirstOrDefault(),
+                Rating = r.Rating,
+                Comment = r.Comment,
+                CreatedAt = r.CreatedAt
+            })
             .ToListAsync();
     }
 }
