@@ -118,28 +118,77 @@
                 </div>
 
                 @* УПРАВЛЕНИЕ ЗАКАЗОМ *@
+                @* --- УПРАВЛЕНИЕ ЗАКАЗОМ --- *@
+                @* --- УПРАВЛЕНИЕ ЗАКАЗОМ --- *@
+                @* --- УПРАВЛЕНИЕ ЗАКАЗОМ (Умная логика статусов) --- *@
                 <div class="actions-zone mt-3">
-                    @if (Auth.User?.RoleId == 1 && order.Status == "WaitingForPayment")
-                    {
-                        <button class="btn-pay-now w-100" @onclick="GoToPayment">
-                            Оплатить @order.TotalAmount.ToString("N0") ₽ <i class="bi bi-credit-card-2-back ms-2"></i>
-                        </button>
 
-                        @if (!string.IsNullOrEmpty(order.PaymentId))
+                    @* --- ЭТАП 1: ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ (Пре-модерация) --- *@
+                    @if (order.Status == "WaitingForConfirmation")
+                    {
+                        @if (Auth.User?.RoleId == 2) @* Видит Инженер *@
                         {
-                            <div class="alert alert-info mt-3 p-3" style="border-radius: 18px; background: rgba(0, 188, 212, 0.1); border: 1px solid rgba(0, 188, 212, 0.2); color: #00bcd4;">
-                                <small class="d-block mb-2"><i class="bi bi-info-circle me-1"></i> Оплатили, но статус не изменился?</small>
-                                <button class="btn btn-sm btn-info w-100" style="color: white; font-weight: 700; border-radius: 10px;" @onclick="CheckStatus">
-                                    <i class="bi bi-arrow-repeat me-1"></i> Проверить оплату
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success w-50" @onclick="AcceptOrder" style="border-radius:15px; font-weight:700; background:#4CAF50; border:none; padding: 15px;">
+                                    <i class="bi bi-check-lg"></i> Принять работу
+                                </button>
+                                <button class="btn-danger-modern w-50" @onclick='() => HandleDecline("инженер")'>
+                                    <i class="bi bi-x-lg"></i> Отклонить
                                 </button>
                             </div>
+                            <p class="text-muted small mt-2 text-center"><i class="bi bi-info-circle"></i> Заказчик сможет оплатить только после вашего подтверждения.</p>
+                        }
+                        else @* Видит Заказчик *@
+                        {
+                            <div class="alert alert-warning" style="border-radius:18px; background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.2); color: #ffc107; padding:15px;">
+                                <i class="bi bi-hourglass-split me-2"></i> Проект на рассмотрении. Ожидайте подтверждения от инженера.
+                            </div>
+                            <button class="btn-danger-modern w-100" @onclick='() => HandleDecline("заказчик")'>
+                                <i class="bi bi-trash3 me-2"></i> Отменить запрос
+                            </button>
                         }
                     }
 
+                    @* --- ЭТАП 2: ОЖИДАНИЕ ОПЛАТЫ (После подтверждения) --- *@
+                    @if (order.Status == "WaitingForPayment")
+                    {
+                        @if (Auth.User?.RoleId == 1) @* Видит Заказчик *@
+                        {
+                            <button class="btn-pay-now w-100 mb-2" @onclick="GoToPayment">
+                                Оплатить и начать проект (@order.TotalAmount.ToString("N0") ₽) <i class="bi bi-credit-card-2-back ms-2"></i>
+                            </button>
+
+                            @* ПРОВЕРКА ОПЛАТЫ (Если платеж уже запущен) *@
+                            @if (!string.IsNullOrEmpty(order.PaymentId))
+                            {
+                                <div class="alert alert-info mt-2 mb-3 p-3" style="border-radius: 18px; background: rgba(0, 188, 212, 0.1); border: 1px solid rgba(0, 188, 212, 0.2); color: #00bcd4;">
+                                    <small class="d-block mb-2"><i class="bi bi-info-circle me-1"></i> Оплатили, но статус не изменился?</small>
+                                    <button class="btn btn-sm btn-info w-100" style="color: white; font-weight: 700; border-radius: 10px;" @onclick="CheckStatus">
+                                        <i class="bi bi-arrow-repeat me-1"></i> Проверить статус оплаты
+                                    </button>
+                                </div>
+                            }
+
+                            <button class="btn-danger-modern w-100" @onclick='() => HandleDecline("заказчик")'>
+                                <i class="bi bi-trash3 me-2"></i> Отменить и закрыть проект
+                            </button>
+                        }
+                        else @* Видит Инженер *@
+                        {
+                            <div class="alert alert-info" style="border-radius:18px; background: rgba(0, 188, 212, 0.1); border: 1px solid rgba(0, 188, 212, 0.2); color: #00bcd4; padding:20px;">
+                                <i class="bi bi-check2-circle me-2"></i> Вы подтвердили готовность. Ожидайте оплаты от клиента.
+                            </div>
+                            <button class="btn-danger-modern w-100" @onclick='() => HandleDecline("инженер")'>
+                                <i class="bi bi-x-circle me-2"></i> Отказываюсь работать
+                            </button>
+                        }
+                    }
+
+                    @* --- ЭТАП 3: ПРИЕМКА РЕЗУЛЬТАТА --- *@
                     @if (Auth.User?.RoleId == 1 && order.Status == "UnderReview")
                     {
                         <button class="btn-accept-work w-100" @onclick="AcceptWork">
-                            <i class="bi bi-check-circle-fill me-2"></i> Принять работу
+                            <i class="bi bi-check-circle-fill me-2"></i> Принять готовую работу
                         </button>
                     }
                 </div>
@@ -774,6 +823,44 @@
             height: 100%;
             object-fit: cover; /* Сохраняем пропорции, обрезая лишнее */
         }
+
+    .btn-cancel-request {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.4);
+        padding: 12px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-cancel-request:hover {
+            color: #ff5252;
+            border-color: #ff5252;
+            background: rgba(255, 82, 82, 0.05);
+        }
+
+    .btn-danger-modern {
+        background: rgba(255, 82, 82, 0.1) !important;
+        border: 1px solid #ff5252 !important;
+        color: #ff5252 !important;
+        padding: 12px !important;
+        border-radius: 15px !important;
+        font-weight: 700 !important;
+        transition: 0.3s !important;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .btn-danger-modern:hover {
+            background: #ff5252 !important;
+            color: white !important;
+            box-shadow: 0 5px 15px rgba(255, 82, 82, 0.3);
+        }
 </style>
 
 @code {
@@ -824,6 +911,10 @@
 
                     // Устанавливаем флаг: прокрутить вниз после отрисовки нового сообщения
                     _shouldScrollToBottom = true;
+                    if (user == "Система" || user == "🤖")
+                    {
+                        await LoadAllData();
+                    }
 
                     // Используем InvokeAsync, чтобы безопасно обновить UI из потока SignalR
                     await InvokeAsync(StateHasChanged);
@@ -982,6 +1073,41 @@
             StateHasChanged(); // Принудительно перерисовываем UI, чтобы убрать блок
         }
     }
+    private async Task AcceptOrder()
+    {
+        var res = await Http.PatchAsync($"{BaseApiUrl}/api/orders/{OrderId}/accept", null);
+        if (res.IsSuccessStatusCode)
+        {
+            await LoadAllData();
+            await JS.InvokeVoidAsync("alert", "Вы приняли заказ! Теперь клиент может его оплатить.");
+        }
+    }
+    private async Task HandleDecline(string role)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Вы уверены? Это действие нельзя отменить.");
+        if (!confirmed) return;
+
+        try
+        {
+            // Используем статус Refused для отмены на ранних этапах
+            var res = await Http.PatchAsync($"{BaseApiUrl}/api/orders/{OrderId}/status?newStatus=Refused&currentUserId={Auth.User.Id}", null);
+
+            if (res.IsSuccessStatusCode)
+            {
+                // Сразу вызываем обновление данных
+                await LoadAllData();
+                StateHasChanged(); // Принудительно перерисовываем
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Ошибка сервера при отмене.");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Произошла ошибка связи с сервером.";
+        }
+    }
 
     private async Task UploadOrderFile(InputFileChangeEventArgs e)
     {
@@ -1124,16 +1250,22 @@
 
     private string TranslateStatus(string? s) => s switch
     {
+        "WaitingForConfirmation" => "Ожидает подтверждения", // Новый этап
         "WaitingForPayment" => "Ожидает оплаты",
         "InProgress" => "В работе",
         "UnderReview" => "На проверке",
         "Completed" => "Завершен",
+        "Refused" => "Отклонено",
+        "Cancelled" => "Отменено",
         _ => "Создан"
     };
 
     private int GetStepValue(string? status) => status switch
     {
+        // Пока инженер не подтвердил И пока заказчик не оплатил — это 1-й шаг
+        "WaitingForConfirmation" => 1,
         "WaitingForPayment" => 1,
+
         "InProgress" => 2,
         "UnderReview" => 3,
         "Completed" => 4,

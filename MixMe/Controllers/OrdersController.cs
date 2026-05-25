@@ -35,39 +35,37 @@ public class OrdersController : ControllerBase
             EngineerId = dto.EngineerId,
             ServiceId = dto.ServiceId,
             TotalAmount = dto.TotalAmount,
-            Status = "WaitingForPayment",
+            Status = "WaitingForConfirmation", // Начальный статус: инженер должен проверить
             CreatedAt = DateTime.UtcNow
         };
 
         _context.Orders.Add(newOrder);
-        await _context.SaveChangesAsync();
 
         var service = await _context.Services.FindAsync(dto.ServiceId);
         string serviceName = service?.Name ?? "Индивидуальное предложение";
 
-        var content = $"🤖 Проект '{serviceName}' создан. Ожидается оплата заказчиком.";
-        var systemMsg = new Message
+        // 1. Системное сообщение в чат
+        string content = $"🤖 Проект '{serviceName}' создан. Инженер изучает исходники перед подтверждением.";
+        _context.Messages.Add(new Message
         {
             OrderId = newOrder.Id,
             SenderId = Guid.Empty,
             Content = content,
             SentAt = DateTime.UtcNow
-        };
+        });
 
-        _context.Messages.Add(systemMsg);
-
-        // --- НОВОЕ: Уведомление в БД для инженера ---
-        _context.Notifications.Add(new Notification
+        // 2. Уведомление в БД для инженера (чтобы он увидел колокольчик)
+        _context.Notifications.Add(new MixMeShared.Notification
         {
             UserId = dto.EngineerId,
-            Text = $"У вас новый заказ на услугу: {serviceName}",
+            Text = $"📩 Новый запрос на проект: {serviceName}. Требуется ваше подтверждение.",
             Link = $"/order/{newOrder.Id}",
             CreatedAt = DateTime.UtcNow
         });
 
         await _context.SaveChangesAsync();
 
-        // УВЕДОМЛЕНИЕ: Отправляем инженеру персонально через SignalR
+        // 3. SignalR: оповещаем инженера мгновенно
         await _hubContext.Clients.Group(dto.EngineerId.ToString()).SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", content);
 
         return Ok(newOrder.Id);
@@ -153,36 +151,66 @@ public class OrdersController : ControllerBase
         if (order == null) return NotFound();
 
         order.Status = newStatus;
+
+        // Базовый текст сообщения
         string content = $"🤖 Статус заказа изменен на: {TranslateStatusForChat(newStatus)}";
 
-        _context.Messages.Add(new Message { OrderId = id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
+        // --- ЛОГИКА УВЕДОМЛЕНИЙ ДЛЯ КАЖДОГО СТАТУСА ---
 
-        // --- НОВОЕ: Логика уведомлений в БД при смене статуса ---
-        if (newStatus == "UnderReview")
+        if (newStatus == "WaitingForPayment") // Инженер подтвердил
         {
-            _context.Notifications.Add(new Notification
+            content = "✅ Инженер подтвердил готовность! Заказчик, теперь вы можете оплатить проект.";
+            _context.Notifications.Add(new MixMeShared.Notification
             {
                 UserId = order.CustomerId,
-                Text = "Инженер загрузил результат! Пожалуйста, проверьте работу.",
+                Text = "Инженер принял ваш заказ! Можно переходить к оплате.",
                 Link = $"/order/{id}",
                 CreatedAt = DateTime.UtcNow
             });
         }
-        else if (newStatus == "Completed")
+        else if (newStatus == "InProgress") // Оплата прошла
+        {
+            content = "💰 Оплата подтверждена. Инженер приступил к выполнению работы.";
+            // (Обычно уведомление здесь не нужно, так как оба видят системное сообщение в чате)
+        }
+        else if (newStatus == "UnderReview") // Инженер загрузил результат
+        {
+            content = "🚀 Работа выполнена! Заказчик, пожалуйста, проверьте результат и примите проект.";
+            _context.Notifications.Add(new MixMeShared.Notification
+            {
+                UserId = order.CustomerId,
+                Text = "Инженер загрузил финальный микс! Проверьте работу.",
+                Link = $"/order/{id}",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        else if (newStatus == "Completed") // Заказчик нажал "Принять"
         {
             order.CompletedAt = DateTime.UtcNow;
-            _context.Notifications.Add(new Notification
+            content = "🎉 Проект успешно завершен! Спасибо за сотрудничество.";
+            _context.Notifications.Add(new MixMeShared.Notification
             {
                 UserId = order.EngineerId,
-                Text = "Заказчик принял работу! Проект успешно завершен.",
+                Text = "Заказчик принял работу! Средства зачислены на ваш баланс.",
                 Link = $"/order/{id}",
                 CreatedAt = DateTime.UtcNow
             });
         }
+
+        else if (newStatus == "Refused")
+        {
+            // Определяем, кто инициатор действия
+            string initiator = (currentUserId == order.EngineerId) ? "Инженер отклонил выполнение проекта" : "Заказчик отменил запрос на проект";
+
+            content = $"❌ {initiator}. Сделка закрыта.";
+        }
+
+        // Сохраняем сообщение в историю чата
+        _context.Messages.Add(new Message { OrderId = id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
 
         await _context.SaveChangesAsync();
 
-        // УВЕДОМЛЕНИЕ SignalR
+        // --- SIGNALR УВЕДОМЛЕНИЯ (Всем участникам) ---
         await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
         await _hubContext.Clients.Group(order.CustomerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
         await _hubContext.Clients.Group(order.EngineerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
@@ -242,8 +270,85 @@ public class OrdersController : ControllerBase
         return Ok(new { paid = false });
     }
 
+    // MixMe/Controllers/OrdersController.cs
+
+    [HttpPatch("{id}/decline")]
+    public async Task<IActionResult> DeclineOrder(Guid id, [FromQuery] Guid currentUserId)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null) return NotFound();
+
+        // Отклонить можно только если заказ еще не оплачен (статус WaitingForPayment)
+        if (order.Status != "WaitingForPayment")
+            return BadRequest("Нельзя отклонить заказ, который уже оплачен или находится в работе.");
+
+        // Меняем статус на Refused (Отклонено)
+        order.Status = "Refused";
+
+        // Кто именно отклонил?
+        var user = await _context.Profiles.FindAsync(currentUserId);
+        string initiatorType = (currentUserId == order.EngineerId) ? "Инженер" : "Заказчик";
+
+        // Системное сообщение
+        string content = $"❌ {initiatorType} {user.Username} отклонил запрос на проект. Сделка закрыта.";
+
+        _context.Messages.Add(new Message
+        {
+            OrderId = id,
+            SenderId = Guid.Empty,
+            Content = content,
+            SentAt = DateTime.UtcNow
+        });
+
+        // Уведомление второму участнику
+        Guid recipientId = (currentUserId == order.CustomerId) ? order.EngineerId : order.CustomerId;
+        _context.Notifications.Add(new Notification
+        {
+            UserId = recipientId,
+            Text = $"Проект был отклонен участником {user.Username}.",
+            Link = $"/order/{id}",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+
+        // SignalR оповещение
+        await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+
+        return Ok();
+    }
+
+    [HttpPatch("{id}/accept")]
+    public async Task<IActionResult> AcceptOrder(Guid id)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null) return NotFound();
+
+        if (order.Status != "WaitingForConfirmation")
+            return BadRequest("Заказ нельзя принять в текущем статусе.");
+
+        order.Status = "WaitingForPayment"; // Теперь можно платить
+
+        string content = "✅ Инженер подтвердил готовность! Заказчик, теперь вы можете оплатить проект для начала работы.";
+        _context.Messages.Add(new Message
+        {
+            OrderId = id,
+            SenderId = Guid.Empty,
+            Content = content,
+            SentAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+
+        return Ok();
+    }
+
     private string TranslateStatusForChat(string status) => status switch
     {
+        "WaitingForConfirmation" => "Ожидает подтверждения инженером",
+        "WaitingForPayment" => "Ожидает оплаты заказчиком",
+        "Refused" => "Отклонено инженером",
         "InProgress" => "В работе",
         "UnderReview" => "На проверке (результат загружен)",
         "Completed" => "Завершен (работа принята)",

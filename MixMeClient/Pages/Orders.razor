@@ -337,6 +337,28 @@
         background: rgba(0, 188, 212, 0.1); /* Голубой фон */
         color: #00bcd4; /* Голубой текст */
     }
+
+    .status-badge.refused {
+        background: rgba(255, 82, 82, 0.1); /* Прозрачный красный фон */
+        color: #ff5252; /* Яркий красный текст */
+    }
+
+    /* Также можно добавить стиль для отмененного заказа (Cancelled) */
+    .status-badge.cancelled {
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.4);
+    }
+    /* MixMeClient/Pages/Orders.razor */
+
+    .status-badge.waitingforconfirmation {
+        background: rgba(255, 193, 7, 0.1); /* Желтоватый фон */
+        color: #FFC107;
+    }
+
+    .status-badge.refused {
+        background: rgba(255, 82, 82, 0.1);
+        color: #ff5252;
+    }
 </style>
 
 @code {
@@ -355,22 +377,23 @@
         if (orders == null) return new List<OrderViewModel>();
         return activeTab switch
         {
-            "active" => orders.Where(o => o.Status == "InProgress"),
+            "active" => orders.Where(o => o.Status == "InProgress" || o.Status == "UnderReview"),
             "pending" => orders.Where(o => o.Status == "WaitingForPayment"),
-            "done" => orders.Where(o => o.Status == "Completed"),
+            // Можно выводить и отклоненные в списке завершенных:
+            "done" => orders.Where(o => o.Status == "Completed" || o.Status == "Refused" || o.Status == "Cancelled"),
             _ => orders
         };
     }
 
-    private string TranslateStatus(string status) => status switch
+    private string TranslateStatus(string? s) => s switch
     {
-        "Created" => "Создан",
+        "WaitingForConfirmation" => "Ожидает подтверждения",
         "WaitingForPayment" => "Ожидает оплаты",
         "InProgress" => "В работе",
-        "UnderReview" => "На проверке", 
+        "UnderReview" => "На проверке",
         "Completed" => "Завершен",
-        "Cancelled" => "Отменен",
-        _ => status
+        "Refused" => "Отклонено",
+        _ => "Создан"
     };
 
     private string GetFullUrl(string? url)
