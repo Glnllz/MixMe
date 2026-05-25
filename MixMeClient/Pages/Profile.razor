@@ -153,29 +153,21 @@
                                 {
                                     <div class="dashboard-finance">
                                         <div class="finance-head">
-                                            <span class="f-title"><i class="bi bi-bar-chart-line me-2"></i> Финансовая динамика</span>
+                                            <span class="f-title"><i class="bi bi-graph-up-arrow me-2"></i> Финансовая динамика</span>
                                             <div class="f-total">Всего заработано: <span>@stats.IncomeHistory.Sum(x => x.Amount).ToString("N0") ₽</span></div>
                                         </div>
 
-                                        <div class="income-scroll-track scroll-styled">
-                                            @if (!stats.IncomeHistory.Any())
-                                            {
-                                                <div class="no-data-msg">История транзакций пока пуста</div>
-                                            }
-                                            else
-                                            {
-                                                @foreach (var month in stats.IncomeHistory)
-                                                {
-                                                    <div class="income-bar-row">
-                                                        <div class="month-label">@month.MonthName</div>
-                                                        <div class="bar-container">
-                                                            <div class="bar-fill" style="width: @(CalculateBarWidth(month.Amount))%"></div>
-                                                        </div>
-                                                        <div class="amount-label">@month.Amount.ToString("N0") ₽</div>
-                                                    </div>
-                                                }
-                                            }
-                                        </div>
+                                        @if (!stats.IncomeHistory.Any())
+                                        {
+                                            <div class="no-data-msg">Пока недостаточно данных для графика</div>
+                                        }
+                                        else
+                                        {
+                                            @* КОНТЕЙНЕР ДЛЯ ГРАФИКА *@
+                                            <div class="chart-container-box">
+                                                <canvas id="incomeChart"></canvas>
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>
@@ -1480,7 +1472,15 @@
         font-size: 0.9rem;
     }
 
-    
+    .chart-container-box {
+        width: 100%;
+        height: 250px; /* Высота графика */
+        position: relative;
+        margin-top: 20px;
+        padding: 10px;
+        background: rgba(0,0,0,0.2);
+        border-radius: 20px;
+    }
 </style>
 
 @code {
@@ -1526,10 +1526,7 @@
         currentTrackUrl = "";
 
         // 2. Определение целевого ID
-        // Если мы еще не знаем кто мы (Auth не успел подгрузиться),
-        // и UserId в ссылке нет — просто выходим из метода, MainLayout скоро всё подгрузит.
         if (UserId == null && Auth.User == null) return;
-
         Guid targetId = UserId ?? Auth.User?.Id ?? Guid.Empty;
 
         if (targetId == Guid.Empty)
@@ -1542,15 +1539,17 @@
         {
             // 3. Загрузка основного профиля
             user = await Http.GetFromJsonAsync<UserProfile>($"{BaseApiUrl}/api/profiles/{targetId}");
+
             if (user?.RoleId == 2)
             {
-                // ИСПРАВЛЕНО: Загружаем через обертку для получения статистики выполненных заказов
                 var engResponse = await Http.GetFromJsonAsync<EngineerWrapper>($"{BaseApiUrl}/api/engineers/{targetId}");
                 if (engResponse != null)
                 {
                     engineerData = engResponse.Data;
                     completedOrdersCount = engResponse.CompletedOrdersCount;
                 }
+
+                // Загружаем статистику
                 stats = await Http.GetFromJsonAsync<EngineerStatsDto>($"{BaseApiUrl}/api/engineers/{targetId}/stats");
 
                 portfolioItems = await Http.GetFromJsonAsync<List<PortfolioItem>>($"{BaseApiUrl}/api/portfolios/engineer/{targetId}") ?? new();
@@ -1566,6 +1565,33 @@
         if (action == "offer" && Auth.User?.RoleId == 2 && user?.RoleId == 1)
         {
             showOfferModal = true;
+        }
+
+        // --- ОТРИСОВКА ГРАФИКА ---
+        if (user?.RoleId == 2 && stats != null && stats.IncomeHistory.Any())
+        {
+            // ВАЖНО: Принудительно просим Blazor обновить UI, чтобы появился <canvas>
+            StateHasChanged();
+
+            // Ждем чуть дольше (200мс), чтобы браузер успел отрисовать DOM элементы
+            await Task.Delay(200);
+
+            // Вызываем JS
+            await RenderChart();
+        }
+    }
+
+    private async Task RenderChart()
+    {
+        if (stats != null && stats.IncomeHistory.Any())
+        {
+            // Подготавливаем данные: переворачиваем список, чтобы шел от старых к новым
+            var history = stats.IncomeHistory.AsEnumerable().Reverse().ToList();
+            var labels = history.Select(h => h.MonthName).ToArray();
+            var data = history.Select(h => (double)h.Amount).ToArray();
+
+            // Вызываем наш JS скрипт
+            await JS.InvokeVoidAsync("renderIncomeChart", labels, data);
         }
     }
 

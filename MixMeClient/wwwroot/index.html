@@ -46,6 +46,7 @@
             scrollbar-width: thin;
             scrollbar-color: rgba(233, 30, 99, 0.3) rgba(0, 0, 0, 0.2);
         }
+
         html, body {
             margin: 0;
             padding: 0;
@@ -62,6 +63,7 @@
             flex-direction: column;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -109,6 +111,63 @@
                     });
                 }, 50);
             }
+        };
+    </script>
+    <script>
+        window.renderIncomeChart = (labels, data) => {
+            const canvas = document.getElementById('incomeChart');
+
+            // ПРОВЕРКА: Если элемента нет, выходим из функции
+            if (!canvas) {
+                console.warn("Canvas 'incomeChart' not found in DOM yet.");
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+
+            // Очистка старого графика, если он был (Chart.js создает объект на элементе)
+            const existingChart = Chart.getChart(canvas);
+            if (existingChart) {
+                existingChart.destroy();
+            }
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(233, 30, 99, 0.4)');
+            gradient.addColorStop(1, 'rgba(233, 30, 99, 0.0)');
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Доход (₽)',
+                        data: data,
+                        borderColor: '#E91E63',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: 'rgba(255,255,255,0.5)' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255,255,255,0.5)' }
+                        }
+                    }
+                }
+            });
         };
     </script>
 </body>
