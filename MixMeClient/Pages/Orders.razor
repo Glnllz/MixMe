@@ -245,29 +245,58 @@
     }
 
     /* СТАТУСЫ */
+    /* Базовый стиль бейджа (чтобы всегда выглядел как кнопка/чип) */
     .status-badge {
         display: inline-block;
-        padding: 6px 16px;
+        padding: 6px 14px;
         border-radius: 10px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 900;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 1px;
+        text-align: center;
+        min-width: 120px;
     }
 
-        .status-badge.waitingforpayment {
+        /* 1. Ожидание (Желтый) */
+        .status-badge.waitingforconfirmation,
+        .status-badge.waitingforpayment,
+        .status-badge.created {
             background: rgba(255, 193, 7, 0.1);
             color: #FFC107;
+            border: 1px solid rgba(255, 193, 7, 0.2);
         }
 
-        .status-badge.inprogress {
+        /* 2. В процессе (Голубой) */
+        .status-badge.inprogress,
+        .status-badge.underreview {
             background: rgba(0, 188, 212, 0.1);
             color: #00bcd4;
+            border: 1px solid rgba(0, 188, 212, 0.2);
         }
 
+        /* 3. Успех (Зеленый) */
         .status-badge.completed {
             background: rgba(76, 175, 80, 0.1);
             color: #4CAF50;
+            border: 1px solid rgba(76, 175, 80, 0.2);
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.1);
+        }
+
+        /* 4. Ошибка / Отказ (Красный) */
+        .status-badge.refused,
+        .status-badge.disputed {
+            background: rgba(255, 82, 82, 0.1);
+            color: #ff5252;
+            border: 1px solid rgba(255, 82, 82, 0.2);
+        }
+
+        /* 5. Отменено / Арбитраж вернул деньги (Серый) */
+        .status-badge.cancelled {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-decoration: line-through; /* Визуально подчеркиваем, что сделка аннулирована */
         }
 
         .status-badge.created {
@@ -387,11 +416,13 @@
 
     private string TranslateStatus(string? s) => s switch
     {
-        "WaitingForConfirmation" => "Ожидает подтверждения",
+        "WaitingForConfirmation" => "На рассмотрении",
         "WaitingForPayment" => "Ожидает оплаты",
         "InProgress" => "В работе",
         "UnderReview" => "На проверке",
         "Completed" => "Завершен",
+        "Cancelled" => "Отменен арбитром", // Статус после возврата денег
+        "Disputed" => "Идет спор",         // Статус во время суда
         "Refused" => "Отклонено",
         _ => "Создан"
     };

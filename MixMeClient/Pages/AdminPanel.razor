@@ -1,0 +1,260 @@
+﻿@page "/admin"
+@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+<BackgroundGlow />
+
+<div class="admin-container fade-in">
+    <header class="admin-header">
+        <h1>Панель модератора</h1>
+        <div class="admin-tabs">
+            <button class="tab @(activeTab == "posts" ? "active" : "")" @onclick='() => activeTab = "posts"'>Посты</button>
+            <button class="tab @(activeTab == "reviews" ? "active" : "")" @onclick='() => activeTab = "reviews"'>Отзывы</button>
+            <button class="tab @(activeTab == "orders" ? "active" : "")" @onclick='() => activeTab = "orders"'>Арбитраж</button>
+        </div>
+    </header>
+
+    <div class="admin-content">
+        @if (activeTab == "posts")
+        {
+            <div class="grid-list">
+                @foreach (var post in pendingPosts)
+                {
+                    <div class="admin-card glass-box">
+                        <div class="card-info">
+                            <span class="author">Автор: @post.AuthorName</span>
+                            <p>@post.Content</p>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn-approve" @onclick="() => ApprovePost(post.Id)">Одобрить</button>
+                            <button class="btn-reject" @onclick="() => RejectPost(post.Id)">Удалить</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (activeTab == "reviews")
+        {
+            <div class="grid-list">
+                @foreach (var rev in pendingReviews)
+                {
+                    <div class="admin-card glass-box">
+                        <div class="card-info">
+                            <span class="author">От: @rev.ReviewerName | Для: @rev.EngineerName</span>
+                            <div class="stars">⭐ @rev.Rating/5</div>
+                            <p>@rev.Comment</p>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn-approve" @onclick="() => ApproveReview(rev.Id)">Разрешить</button>
+                            <button class="btn-reject" @onclick="() => RejectReview(rev.Id)">Удалить</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (activeTab == "orders")
+        {
+            <div class="grid-list">
+                @foreach (var order in disputedOrders)
+                {
+                    <div class="admin-card glass-box order-dispute">
+                        <div class="card-info">
+                            <h3>Спор по заказу</h3>
+                            <p>Клиент: <b>@order.Customer</b> | Инженер: <b>@order.Engineer</b></p>
+                            <p>Сумма: <b>@order.TotalAmount ₽</b></p>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn-approve" @onclick='() => ResolveOrder(order.Id, "Pay")'>Выплатить инженеру</button>
+                            <button class="btn-reject" @onclick='() => ResolveOrder(order.Id, "Refund")'>Вернуть заказчику</button>
+                            <button class="btn-view" @onclick='() => Nav.NavigateTo($"/order/{order.Id}")'>Смотреть чат</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .admin-container {
+        padding: 100px 50px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 40px;
+    }
+
+    .admin-tabs {
+        display: flex;
+        gap: 15px;
+        background: rgba(255,255,255,0.05);
+        padding: 8px;
+        border-radius: 15px;
+    }
+
+    .tab {
+        background: transparent;
+        border: none;
+        color: #888;
+        padding: 10px 25px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: 0.3s;
+        font-weight: 700;
+    }
+
+        .tab.active {
+            background: #E91E63;
+            color: white;
+        }
+
+    .admin-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 25px;
+        margin-bottom: 20px;
+        border-radius: 25px;
+    }
+
+    .card-info .author {
+        color: #E91E63;
+        font-weight: 800;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
+    .card-info p {
+        margin-top: 10px;
+        font-size: 1.1rem;
+        color: #eee;
+    }
+
+    .card-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-approve {
+        background: #4CAF50;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 12px;
+        font-weight: 700;
+    }
+
+    .btn-reject {
+        background: #F44336;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 12px;
+        font-weight: 700;
+    }
+
+    .btn-view {
+        background: #2196F3;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 12px;
+        font-weight: 700;
+    }
+</style>
+
+@code {
+    private string activeTab = "posts";
+    private List<AdminPostDto> pendingPosts = new();
+    private List<AdminReviewDto> pendingReviews = new();
+    private List<AdminOrderDto> disputedOrders = new();
+    private string BaseApiUrl = "https://localhost:7237";
+
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.User?.RoleId != 3) { Nav.NavigateTo("/"); return; }
+
+        await LoadData();
+
+        // Настраиваем SignalR для мгновенного обновления
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl($"{BaseApiUrl}/chathub")
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Слушаем сигнал "Обнови админку"
+        hubConnection.On("UpdateAdminPanel", async () =>
+        {
+            await LoadData();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            pendingPosts = await Http.GetFromJsonAsync<List<AdminPostDto>>($"{BaseApiUrl}/api/Admin/posts/pending") ?? new();
+            pendingReviews = await Http.GetFromJsonAsync<List<AdminReviewDto>>($"{BaseApiUrl}/api/Admin/reviews/pending") ?? new();
+            disputedOrders = await Http.GetFromJsonAsync<List<AdminOrderDto>>($"{BaseApiUrl}/api/Admin/orders/disputed") ?? new();
+        }
+        catch (Exception ex) { Console.WriteLine(ex.Message); }
+    }
+
+    // Методы Approve/Reject (оставляем как были)
+    private async Task ApprovePost(int id)
+    {
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/posts/{id}/status?status=Approved", null);
+        await LoadData();
+    }
+
+    private async Task RejectPost(int id)
+    {
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/posts/{id}/status?status=Rejected", null);
+        await LoadData();
+    }
+
+    private async Task ApproveReview(int id)
+    {
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/reviews/{id}/approve", null);
+        await LoadData();
+    }
+
+    private async Task RejectReview(int id)
+    {
+        await Http.DeleteAsync($"{BaseApiUrl}/api/Admin/reviews/{id}/reject");
+        await LoadData();
+    }
+
+    private async Task ResolveOrder(Guid id, string decision)
+    {
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/orders/{id}/resolve?decision={decision}", null);
+        await LoadData();
+    }
+
+    // Очистка при закрытии
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null) await hubConnection.DisposeAsync();
+    }
+
+    // DTO классы (те же самые)
+    public class AdminPostDto { public int Id { get; set; } public string Content { get; set; } = ""; public string AuthorName { get; set; } = ""; }
+    public class AdminReviewDto { public int Id { get; set; } public int Rating { get; set; } public string Comment { get; set; } = ""; public string ReviewerName { get; set; } = ""; public string EngineerName { get; set; } = ""; }
+    public class AdminOrderDto { public Guid Id { get; set; } public decimal TotalAmount { get; set; } public string Customer { get; set; } = ""; public string Engineer { get; set; } = ""; }
+}

@@ -276,6 +276,9 @@ namespace MixMe.Migrations
                     b.Property<int>("LikeCount")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
@@ -331,6 +334,9 @@ namespace MixMe.Migrations
 
                     b.Property<string>("ReviewerName")
                         .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

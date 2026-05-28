@@ -15,5 +15,6 @@ namespace MixMeShared
         public string? AudioUrl { get; set; } // Ссылка на трек
         public int LikeCount { get; set; }    // Количество лайков
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public ModerationStatus Status { get; set; } = ModerationStatus.Pending;
     }
 }

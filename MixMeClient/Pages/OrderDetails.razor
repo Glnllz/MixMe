@@ -158,7 +158,6 @@
                                 Оплатить и начать проект (@order.TotalAmount.ToString("N0") ₽) <i class="bi bi-credit-card-2-back ms-2"></i>
                             </button>
 
-                            @* ПРОВЕРКА ОПЛАТЫ (Если платеж уже запущен) *@
                             @if (!string.IsNullOrEmpty(order.PaymentId))
                             {
                                 <div class="alert alert-info mt-2 mb-3 p-3" style="border-radius: 18px; background: rgba(0, 188, 212, 0.1); border: 1px solid rgba(0, 188, 212, 0.2); color: #00bcd4;">
@@ -184,12 +183,39 @@
                         }
                     }
 
-                    @* --- ЭТАП 3: ПРИЕМКА РЕЗУЛЬТАТА --- *@
-                    @if (Auth.User?.RoleId == 1 && order.Status == "UnderReview")
+                    @* --- ЭТАП 3: УПРАВЛЕНИЕ АКТИВНЫМ ПРОЕКТОМ (В РАБОТЕ / НА ПРОВЕРКЕ) --- *@
+                    @if (order.Status == "InProgress" || order.Status == "UnderReview")
                     {
-                        <button class="btn-accept-work w-100" @onclick="AcceptWork">
-                            <i class="bi bi-check-circle-fill me-2"></i> Принять готовую работу
-                        </button>
+                        @* 1. Кнопка "Принять" — видит только Заказчик и только если результат загружен *@
+                        @if (Auth.User?.RoleId == 1 && order.Status == "UnderReview")
+                        {
+                            <button class="btn-accept-work w-100 mb-2" @onclick="AcceptWork">
+                                <i class="bi bi-check-circle-fill me-2"></i> Принять готовую работу
+                            </button>
+                        }
+
+                        @* 2. Кнопка "Спор" — видят ОБА (и Заказчик, и Инженер) на любом активном этапе *@
+                        @if (Auth.User?.RoleId == 1 || Auth.User?.RoleId == 2)
+                        {
+                            <button class="btn-danger-modern w-100" @onclick="OpenDispute" style="background: rgba(220, 53, 69, 0.05) !important;">
+                                <i class="bi bi-shield-exclamation me-2"></i> Привлечь арбитраж (Спор)
+                            </button>
+                        }
+                    }
+
+                    @* --- ЭТАП 4: СОСТОЯНИЕ СПОРА (Видят оба участника, когда модератор уже в деле) --- *@
+                    @if (order.Status == "Disputed")
+                    {
+                        <div class="alert mt-3 animate__animated animate__pulse"
+                             style="border-radius: 20px; background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.2); color: #ff8585; padding: 20px;">
+                            <h5 class="alert-heading d-flex align-items-center gap-2" style="font-weight: 800;">
+                                <i class="bi bi-shield-fill-exclamation"></i> Идет разбирательство (Спор)
+                            </h5>
+                            <p class="small mb-0" style="opacity: 0.8;">
+                                Модератор-арбитр подключен к проекту. Он изучит финальный файл, исходники и переписку в чате.
+                                Ожидайте вердикта, кнопки управления заблокированы.
+                            </p>
+                        </div>
                     }
                 </div>
 
@@ -289,9 +315,15 @@
                 </div>
 
                 <div class="chat-input-zone">
-                    <textarea @bind="newMessage" @onkeyup="HandleKeyPress" placeholder="Введите сообщение..."></textarea>
+                    @* Добавляем @bind:event="oninput", чтобы переменная обновлялась мгновенно *@
+                    <textarea @bind="newMessage"
+                              @bind:event="oninput"
+                              @onkeyup="HandleKeyPress"
+                              disabled="@(order?.Status == "Disputed")"
+                              placeholder="@(order?.Status == "Disputed" ? "Чат заморожен модератором..." : "Введите сообщение...")"></textarea>
+
                     <button class="btn-send" @onclick="SendMessage"
-                            disabled="@(hubConnection?.State != HubConnectionState.Connected || string.IsNullOrWhiteSpace(newMessage))">
+                            disabled="@(hubConnection?.State != HubConnectionState.Connected || string.IsNullOrWhiteSpace(newMessage) || order?.Status == "Disputed")">
                         <i class="bi bi-send-fill"></i>
                     </button>
                 </div>
@@ -486,7 +518,7 @@
     .btn-send {
         width: 54px;
         height: 54px;
-        background: #E91E63;
+        background: #E91E63; /* Яркий розовый */
         color: white;
         border: none;
         border-radius: 18px;
@@ -494,20 +526,24 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: 0.3s;
-        flex-shrink: 0; /* Чтобы кнопка не сжималась */
-        box-shadow: 0 5px 15px rgba(233, 30, 99, 0.2);
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(233, 30, 99, 0.3);
     }
 
-        .btn-send:hover:not(:disabled) {
-            transform: scale(1.05);
-            background: #ff2e75;
-            box-shadow: 0 8px 20px rgba(233, 30, 99, 0.4);
-        }
 
         .btn-send:disabled {
-            opacity: 0.3;
+            background: #444 !important; /* Серый фон */
+            opacity: 0.4;
             cursor: not-allowed;
+            box-shadow: none;
+            transform: none !important;
+        }
+
+        /* Эффект при наведении только на активную кнопку */
+        .btn-send:hover:not(:disabled) {
+            background: #ff2e75;
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(233, 30, 99, 0.4);
         }
 
     /* Кнопки */
@@ -1189,6 +1225,45 @@
         }
         catch (Exception ex) { Console.WriteLine($"UpdateStatus Error: {ex.Message}"); }
     }
+    private async Task OpenDispute()
+    {
+        if (Auth.User == null) return;
+
+        // 1. Спрашиваем подтверждение
+        bool confirmed = await JS.InvokeAsync<bool>("confirm",
+            "Вы действительно хотите привлечь арбитраж? Сделка будет заморожена, и модератор MixMe изучит материалы проекта для вынесения решения.");
+
+        if (confirmed)
+        {
+            try
+            {
+                // 2. Отправляем запрос на смену статуса на Disputed
+                // Передаем OrderId, статус и ID текущего пользователя
+                var res = await Http.PatchAsync($"{BaseApiUrl}/api/orders/{OrderId}/status?newStatus=Disputed&currentUserId={Auth.User.Id}", null);
+
+                if (res.IsSuccessStatusCode)
+                {
+                    // 3. Обновляем данные на странице (это скроет кнопки и покажет красную плашку)
+                    await LoadAllData();
+
+                    // 4. Показываем подтверждение
+                    await JS.InvokeVoidAsync("alert", "Запрос в арбитраж отправлен. Модератор скоро подключится к чату.");
+
+                    StateHasChanged();
+                }
+                else
+                {
+                    var errorText = await res.Content.ReadAsStringAsync();
+                    await JS.InvokeVoidAsync("alert", $"Ошибка: {errorText}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Dispute Error: {ex.Message}");
+                await JS.InvokeVoidAsync("alert", "Произошла сетевая ошибка при открытии спора.");
+            }
+        }
+    }
 
     private async Task DeleteFile(int fileId)
     {
@@ -1243,7 +1318,7 @@
         catch (Exception ex) { Console.WriteLine($"SendMessage Error: {ex.Message}"); }
     }
 
-    private async Task HandleKeyPress(KeyboardEventArgs e) { if (e.Key == "Enter") await SendMessage(); }
+    private async Task HandleKeyPress(KeyboardEventArgs e) { if (e.Key == "Enter" && order?.Status != "Disputed") await SendMessage(); }
 
     private string GetFullUrl(string? url) =>
         string.IsNullOrEmpty(url) ? "" : (url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}");

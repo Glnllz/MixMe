@@ -36,70 +36,61 @@ public class ReviewsController : ControllerBase
         var reviewerProfile = await _context.Profiles.FindAsync(review.ReviewerId);
         review.ReviewerName = reviewerProfile?.Username ?? "Пользователь";
         review.CreatedAt = DateTime.UtcNow;
+        review.Status = ModerationStatus.Pending; // Устанавливаем статус "На проверке"
 
         _context.Reviews.Add(review);
 
-        // --- ЛОГИКА УВЕДОМЛЕНИЙ ---
+        // --- ЛОГИКА УВЕДОМЛЕНИЙ (Адаптированная) ---
 
-        // 3. Создаем уведомление в БД для инженера (для колокольчика)
-        var notificationText = $"⭐ {review.ReviewerName} оставил отзыв ({review.Rating}/5): {review.Comment}";
+        // 3. Уведомление инженеру (Колокольчик)
+        // Мы пишем, что отзыв оставлен, но он появится после проверки
+        var notificationText = $"📝 {review.ReviewerName} оставил отзыв. Он появится в профиле после модерации.";
         var notif = new MixMeShared.Notification
         {
-            UserId = review.RevieweeId, // Получатель - инженер
+            UserId = review.RevieweeId,
             Text = notificationText,
-            Link = $"/profile/{review.RevieweeId}", // Ссылка на страницу с отзывами
+            Link = $"/order/{review.OrderId}", // Ведем в заказ, а не в профиль, так как в профиле его еще нет
             CreatedAt = DateTime.UtcNow,
             IsRead = false
         };
         _context.Notifications.Add(notif);
 
-        // 4. Добавляем системное сообщение в чат проекта (для истории)
+        // 4. Системное сообщение в чат
         _context.Messages.Add(new Message
         {
             OrderId = review.OrderId,
             SenderId = Guid.Empty,
-            Content = $"🤖 Заказчик опубликовал отзыв о работе: {review.Rating} звёзд.",
+            Content = $"🤖 Заказчик отправил отзыв. Модератор проверит его в течение 24 часов.",
             SentAt = DateTime.UtcNow
         });
 
-        // 5. Пересчет рейтинга инженера
-        var engineer = await _context.Engineers.FirstOrDefaultAsync(e => e.ProfileId == review.RevieweeId);
-        if (engineer != null)
-        {
-            var allRatings = await _context.Reviews
-                .Where(r => r.RevieweeId == review.RevieweeId)
-                .Select(r => r.Rating)
-                .ToListAsync();
+        // ВАЖНО: Рейтинг НЕ пересчитываем здесь. Это сделает AdminController при Approve!
 
-            // Важно: добавляем текущую оценку в расчет, так как SaveChanges еще не зафиксировал её в списке выше
-            allRatings.Add(review.Rating);
-            engineer.AvgRating = allRatings.Average();
-        }
-
-        // Сохраняем всё одним махом
+        // 5. Сохраняем всё
         await _context.SaveChangesAsync();
 
-        // 6. Отправляем мгновенный сигнал инженеру через SignalR (чтобы выскочил Toast)
+        // 6. SignalR (Тост инженеру)
         await _hubContext.Clients.Group(review.RevieweeId.ToString())
             .SendAsync("ReceiveMessage", review.OrderId.ToString(), "🤖", notificationText);
-
+        await _hubContext.Clients.All.SendAsync("UpdateAdminPanel");
         return Ok();
     }
 
     [HttpGet("engineer/{engineerId}")]
     public async Task<ActionResult<IEnumerable<object>>> GetEngineerReviews(Guid engineerId)
     {
+        // Показываем только ОДОБРЕННЫЕ модератором отзывы
         return await _context.Reviews
-            .Where(r => r.RevieweeId == engineerId)
+            .Where(r => r.RevieweeId == engineerId && r.Status == ModerationStatus.Approved)
             .OrderByDescending(r => r.CreatedAt)
             .Select(r => new {
-                OrderId = r.OrderId,
-                ReviewerId = r.ReviewerId,
+                r.OrderId,
+                r.ReviewerId,
                 ReviewerName = _context.Profiles.Where(p => p.Id == r.ReviewerId).Select(p => p.Username).FirstOrDefault(),
                 ReviewerAvatarUrl = _context.Profiles.Where(p => p.Id == r.ReviewerId).Select(p => p.AvatarUrl).FirstOrDefault(),
-                Rating = r.Rating,
-                Comment = r.Comment,
-                CreatedAt = r.CreatedAt
+                r.Rating,
+                r.Comment,
+                r.CreatedAt
             })
             .ToListAsync();
     }

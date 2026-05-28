@@ -40,6 +40,12 @@
                                 <div class="notification-badge-dot pulse-dot"></div>
                             }
                         </div>
+                        @if (Auth.User?.RoleId == 3) // Предполагаем, что 3 - это Admin
+                        {
+                            <NavLink href="/admin" ActiveClass="active" class="text-warning">
+                                <i class="bi bi-shield-lock-fill me-1"></i> Админ
+                            </NavLink>
+                        }
 
                         @* <div class="nav-link-wrapper">
                             <NavLink href="/chats" ActiveClass="active">Сообщения</NavLink>

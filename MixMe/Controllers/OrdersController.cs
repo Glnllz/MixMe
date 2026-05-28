@@ -140,7 +140,8 @@ public class OrdersController : ControllerBase
         var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
         if (order == null) return NotFound();
 
-        if (order.CustomerId != currentUserId && order.EngineerId != currentUserId)
+        var currentUser = await _context.Profiles.FindAsync(currentUserId);
+        if (order.CustomerId != currentUserId && order.EngineerId != currentUserId && currentUser?.RoleId != 3)
             return StatusCode(403);
 
         // Определяем, кто наш оппонент
@@ -174,9 +175,10 @@ public class OrdersController : ControllerBase
         var order = await _context.Orders.FindAsync(id);
         if (order == null) return NotFound();
 
+        // Обновляем статус заказа
         order.Status = newStatus;
 
-        // Базовый текст сообщения
+        // Базовый текст сообщения (используем твой метод перевода или просто строку)
         string content = $"🤖 Статус заказа изменен на: {TranslateStatusForChat(newStatus)}";
 
         // --- ЛОГИКА УВЕДОМЛЕНИЙ ДЛЯ КАЖДОГО СТАТУСА ---
@@ -195,7 +197,6 @@ public class OrdersController : ControllerBase
         else if (newStatus == "InProgress") // Оплата прошла
         {
             content = "💰 Оплата подтверждена. Инженер приступил к выполнению работы.";
-            // (Обычно уведомление здесь не нужно, так как оба видят системное сообщение в чате)
         }
         else if (newStatus == "UnderReview") // Инженер загрузил результат
         {
@@ -220,13 +221,25 @@ public class OrdersController : ControllerBase
                 CreatedAt = DateTime.UtcNow
             });
         }
-
-        else if (newStatus == "Refused")
+        else if (newStatus == "Refused") // Отказ на ранних стадиях
         {
-            // Определяем, кто инициатор действия
             string initiator = (currentUserId == order.EngineerId) ? "Инженер отклонил выполнение проекта" : "Заказчик отменил запрос на проект";
-
             content = $"❌ {initiator}. Сделка закрыта.";
+        }
+        else if (newStatus == "Disputed") // ОТКРЫТИЕ СПОРА (НОВОЕ)
+        {
+            var user = await _context.Profiles.FindAsync(currentUserId);
+            content = $"⚠️ Покупатель {user?.Username} открыл спор. Ожидайте решения арбитража. Чат и файлы заморожены для проверки модератором.";
+
+            // Уведомление администратору (Guid.Empty как метка системы)
+            _context.Notifications.Add(new MixMeShared.Notification
+            {
+                UserId = Guid.Empty,
+                Text = $"🚨 Открыт спор по заказу №{order.Id.ToString().Substring(0, 8)}",
+                Link = $"/admin",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _hubContext.Clients.All.SendAsync("UpdateAdminPanel");
         }
 
         // Сохраняем сообщение в историю чата
@@ -235,7 +248,10 @@ public class OrdersController : ControllerBase
         await _context.SaveChangesAsync();
 
         // --- SIGNALR УВЕДОМЛЕНИЯ (Всем участникам) ---
+        // Оповещаем комнату заказа
         await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
+
+        // Оповещаем личные каналы участников (чтобы загорелся колокольчик или всплыл тост)
         await _hubContext.Clients.Group(order.CustomerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
         await _hubContext.Clients.Group(order.EngineerId.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
 
@@ -372,11 +388,12 @@ public class OrdersController : ControllerBase
     {
         "WaitingForConfirmation" => "Ожидает подтверждения инженером",
         "WaitingForPayment" => "Ожидает оплаты заказчиком",
-        "Refused" => "Отклонено инженером",
+        "Refused" => "Отклонено участником", // На этапе согласования
         "InProgress" => "В работе",
         "UnderReview" => "На проверке (результат загружен)",
+        "Disputed" => "Передан в арбитраж (открыт спор)", // НОВОЕ: Когда нажали кнопку "Спор"
         "Completed" => "Завершен (работа принята)",
-        "Cancelled" => "Отменен",
+        "Cancelled" => "Проект отменен арбитром (средства возвращены)", // НОВОЕ: Результат спора
         _ => status
     };
 

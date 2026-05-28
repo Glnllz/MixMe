@@ -4,6 +4,8 @@
 @inject MixMeClient.Services.AuthService Auth
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 
 <BackgroundGlow />
 
@@ -136,6 +138,13 @@
                     @foreach (var post in GetFilteredPosts())
                     {
                         <article class="glass-box post-card fade-in-up">
+                            @if (post.UserId == Auth.User?.Id && (int)post.Status == 0) // 0 - это Pending
+                            {
+                                <div class="moderation-alert">
+                                    <i class="bi bi-hourglass-split me-2"></i>
+                                    Ваш пост на проверке у модератора и пока виден только вам.
+                                </div>
+                            }
                             <div class="post-card-header">
                                 <div class="author-part" @onclick='() => Nav.NavigateTo($"/profile/{post.UserId}")'>
                                     <div class="post-ava">
@@ -826,6 +835,17 @@
             transform: translateY(0);
         }
     }
+
+    .moderation-alert {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px dashed #ffc107;
+        color: #ffc107;
+        padding: 12px;
+        border-radius: 15px;
+        margin-bottom: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
 </style>
 
 @code {
@@ -837,11 +857,36 @@
     private int activeFilter = 0;
     private bool isSending = false;
     private string? validationError;
+    private HubConnection? hubConnection;
     private string BaseApiUrl = "https://localhost:7237";
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+
+        // Настраиваем подключение к SignalR
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl($"{BaseApiUrl}/chathub")
+            .WithAutomaticReconnect()
+            .Build();
+
+        // СЛУШАЕМ СОБЫТИЕ ОДОБРЕНИЯ ПОСТА
+        hubConnection.On<int>("PostApproved", async (postId) =>
+        {
+            // Когда кто-то одобрил пост, просто заново загружаем данные
+            await LoadData();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
     }
 
     private async Task LoadData()
@@ -954,6 +999,7 @@
         public string? AvatarUrl { get; set; }
         public int RoleId { get; set; }
         public bool IsLiked { get; set; }
+        public ModerationStatus Status { get; set; } = ModerationStatus.Pending;
     }
 
     public class TopEngineerViewModel

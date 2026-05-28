@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MixMe.Data;
+using MixMe.Hubs;
 using MixMeShared;
 
 namespace MixMe.Controllers;
@@ -11,20 +13,34 @@ namespace MixMe.Controllers;
 public class PostsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IHubContext<ChatHub> _hubContext;
 
-    public PostsController(ApplicationDbContext context)
+    public PostsController(ApplicationDbContext context, IHubContext<ChatHub> hubContext)
     {
         _context = context;
+        _hubContext = hubContext;
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<object>>> GetPosts([FromQuery] Guid currentUserId)
     {
-        var posts = await _context.Posts.OrderByDescending(p => p.CreatedAt).ToListAsync();
+        // 1. Загружаем посты: только одобренные модератором ИЛИ личные посты пользователя (даже если они еще не проверены)
+        var posts = await _context.Posts
+            .Where(p => p.Status == ModerationStatus.Approved || p.UserId == currentUserId)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+
         var result = new List<object>();
 
+        // 2. Проходим по списку и собираем метаданные (лайки, аватарки и т.д.)
         foreach (var p in posts)
         {
+            // Получаем данные профиля автора поста
+            var authorProfile = await _context.Profiles
+                .Where(u => u.Id == p.UserId)
+                .Select(u => new { u.Username, u.AvatarUrl, u.RoleId })
+                .FirstOrDefaultAsync();
+
             result.Add(new
             {
                 p.Id,
@@ -33,13 +49,15 @@ public class PostsController : ControllerBase
                 p.ImageUrl,
                 p.AudioUrl,
                 p.CreatedAt,
+                p.Status, // Добавляем статус, чтобы автор видел "Pending"
                 LikeCount = await _context.PostLikes.CountAsync(l => l.PostId == p.Id),
                 IsLiked = await _context.PostLikes.AnyAsync(l => l.PostId == p.Id && l.UserId == currentUserId),
-                Username = _context.Profiles.Where(u => u.Id == p.UserId).Select(u => u.Username).FirstOrDefault(),
-                AvatarUrl = _context.Profiles.Where(u => u.Id == p.UserId).Select(u => u.AvatarUrl).FirstOrDefault(),
-                RoleId = _context.Profiles.Where(u => u.Id == p.UserId).Select(u => u.RoleId).FirstOrDefault()
+                Username = authorProfile?.Username ?? "Unknown",
+                AvatarUrl = authorProfile?.AvatarUrl,
+                RoleId = authorProfile?.RoleId ?? 0
             });
         }
+
         return Ok(result);
     }
 
@@ -78,6 +96,7 @@ public class PostsController : ControllerBase
         post.CreatedAt = DateTime.UtcNow;
         _context.Posts.Add(post);
         await _context.SaveChangesAsync();
+        await _hubContext.Clients.All.SendAsync("UpdateAdminPanel");
         return Ok(post);
     }
     [HttpGet("search")]

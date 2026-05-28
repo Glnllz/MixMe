@@ -16,5 +16,6 @@ namespace MixMeShared
         public string? Comment { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string? ReviewerName { get; set; }
+        public ModerationStatus Status { get; set; } = ModerationStatus.Pending;
     }
 }
