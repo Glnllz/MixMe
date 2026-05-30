@@ -218,6 +218,13 @@
                         </div>
                     }
                 </div>
+                <div class="text-center">
+                    <button class="btn btn-link text-muted small mt-2"
+                            style="text-decoration: none; font-size: 0.75rem; opacity: 0.6;"
+                            @onclick='() => complaintModal.Show(order.PartnerId, order.PartnerName, order.Id)'>
+                        <i class="bi bi-flag-fill me-1"></i> Сообщить модератору о нарушении
+                    </button>
+                </div>
 
                 @* ФОРМА ОТЗЫВА (ТОЛЬКО ДЛЯ ЗАКАЗЧИКА ПРИ ЗАВЕРШЕНИИ) *@
                 @if (order.Status == "Completed" && Auth.User?.RoleId == 1 && !isReviewSubmitted)
@@ -331,7 +338,7 @@
         </div>
     }
 </div>
-
+<MixMeClient.Components.ComplaintModal @ref="complaintModal" />
 <style>
     .order-details-layout {
         position: fixed;
@@ -902,6 +909,7 @@
 @code {
     [Parameter] public Guid OrderId { get; set; }
     private HubConnection? hubConnection;
+    private MixMeClient.Components.ComplaintModal complaintModal = default!;
     private List<ChatMessage> chatMessages = new();
     private List<OrderFile> orderFiles = new();
     private string newMessage = "";
@@ -1225,44 +1233,15 @@
         }
         catch (Exception ex) { Console.WriteLine($"UpdateStatus Error: {ex.Message}"); }
     }
-    private async Task OpenDispute()
+    private void OpenDispute()
     {
-        if (Auth.User == null) return;
+        // Если данные заказа еще не загрузились, ничего не делаем
+        if (order == null) return;
 
-        // 1. Спрашиваем подтверждение
-        bool confirmed = await JS.InvokeAsync<bool>("confirm",
-            "Вы действительно хотите привлечь арбитраж? Сделка будет заморожена, и модератор MixMe изучит материалы проекта для вынесения решения.");
-
-        if (confirmed)
-        {
-            try
-            {
-                // 2. Отправляем запрос на смену статуса на Disputed
-                // Передаем OrderId, статус и ID текущего пользователя
-                var res = await Http.PatchAsync($"{BaseApiUrl}/api/orders/{OrderId}/status?newStatus=Disputed&currentUserId={Auth.User.Id}", null);
-
-                if (res.IsSuccessStatusCode)
-                {
-                    // 3. Обновляем данные на странице (это скроет кнопки и покажет красную плашку)
-                    await LoadAllData();
-
-                    // 4. Показываем подтверждение
-                    await JS.InvokeVoidAsync("alert", "Запрос в арбитраж отправлен. Модератор скоро подключится к чату.");
-
-                    StateHasChanged();
-                }
-                else
-                {
-                    var errorText = await res.Content.ReadAsStringAsync();
-                    await JS.InvokeVoidAsync("alert", $"Ошибка: {errorText}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Dispute Error: {ex.Message}");
-                await JS.InvokeVoidAsync("alert", "Произошла сетевая ошибка при открытии спора.");
-            }
-        }
+        // Просто открываем окно.
+        // Вся логика "заморозки" теперь сработает только тогда,
+        // когда пользователь нажмет красную кнопку в этом окне.
+        complaintModal.Show(order.PartnerId, order.PartnerName, order.Id);
     }
 
     private async Task DeleteFile(int fileId)

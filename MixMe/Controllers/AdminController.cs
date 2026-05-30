@@ -129,10 +129,13 @@ public class AdminController : ControllerBase
     }
 
     // РЕШЕНИЕ АРБИТРАЖА
+    // РЕШЕНИЕ АРБИТРАЖА (ОБЪЕДИНЕННЫЙ ВАРЬЯНТ)
     [HttpPatch("orders/{id}/resolve")]
-    public async Task<IActionResult> ResolveOrder(Guid id, [FromQuery] string decision)
+    public async Task<IActionResult> ResolveOrder(Guid id, [FromQuery] string decision, [FromQuery] int complaintId)
     {
         var order = await _context.Orders.FindAsync(id);
+        var complaint = await _context.Complaints.FindAsync(complaintId);
+
         if (order == null) return NotFound();
 
         string content = "";
@@ -148,14 +151,54 @@ public class AdminController : ControllerBase
             content = "⚖️ Арбитраж вынес решение: Выплатить гонорар инженеру. Проект завершен.";
         }
 
-        // 1. Добавляем системное сообщение в историю чата
-        _context.Messages.Add(new Message { OrderId = id, SenderId = Guid.Empty, Content = content, SentAt = DateTime.UtcNow });
+        // 1. Закрываем жалобу, чтобы она пропала из панели админа
+        if (complaint != null) complaint.IsResolved = true;
+
+        // 2. Добавляем системное сообщение в историю чата заказа
+        _context.Messages.Add(new Message
+        {
+            OrderId = id,
+            SenderId = Guid.Empty,
+            Content = content,
+            SentAt = DateTime.UtcNow
+        });
+
         await _context.SaveChangesAsync();
 
-        // 2. ОТПРАВЛЯЕМ СИГНАЛ В ЧАТ ( SignalR )
-        // Это заставит страницу заказа обновиться мгновенно у всех
+        // 3. ОТПРАВЛЯЕМ СИГНАЛ В ЧАТ (через SignalR)
+        // Это мгновенно обновит страницу заказа у пользователя и инженера
         await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveMessage", id.ToString(), "🤖", content);
 
+        return Ok();
+    }
+    // --- МОДЕРАЦИЯ ЖАЛОБ ---
+    [HttpGet("complaints/pending")]
+    public async Task<IActionResult> GetComplaints()
+    {
+        var list = await _context.Complaints
+            .Where(c => !c.IsResolved)
+            .Select(c => new {
+                c.Id,
+                c.Reason,
+                c.Comment,
+                c.CreatedAt,
+                c.OrderId,
+                SenderName = _context.Profiles.Where(p => p.Id == c.SenderId).Select(p => p.Username).FirstOrDefault(),
+                TargetName = _context.Profiles.Where(p => p.Id == c.TargetUserId).Select(p => p.Username).FirstOrDefault(),
+                // Добавляем сумму заказа, если он есть
+                OrderAmount = _context.Orders.Where(o => o.Id == c.OrderId).Select(o => o.TotalAmount).FirstOrDefault()
+            })
+            .ToListAsync();
+        return Ok(list);
+    }
+
+    [HttpPatch("complaints/{id}/resolve")]
+    public async Task<IActionResult> ResolveComplaint(int id)
+    {
+        var c = await _context.Complaints.FindAsync(id);
+        if (c == null) return NotFound();
+        c.IsResolved = true;
+        await _context.SaveChangesAsync();
         return Ok();
     }
 }

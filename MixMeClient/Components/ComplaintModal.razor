@@ -1,0 +1,272 @@
+﻿@using MixMeShared
+@inject HttpClient Http
+@inject MixMeClient.Services.AuthService Auth
+@inject IJSRuntime JS
+ @inject NavigationManager Nav
+
+@if (IsVisible)
+{
+    <div class="report-overlay" @onclick="Close">
+        <div class="report-card" @onclick:stopPropagation>
+            <div class="report-header">
+                <h3>Пожаловаться на @TargetName</h3>
+                <button class="btn-close-x" @onclick="Close">×</button>
+            </div>
+
+            <div class="report-body">
+                <p class="label">Выберите причину жалобы</p>
+                <div class="reasons-list">
+                    @foreach (var r in Reasons)
+                    {
+                        <label class="reason-item @(selectedReason == r ? "active" : "")">
+                            <input type="radio" name="reason" value="@r" @onchange="() => selectedReason = r" />
+                            <span class="radio-custom"></span>
+                            @r
+                        </label>
+                    }
+                </div>
+
+                <p class="label mt-4">Добавьте примечание для администраторов (необязательно)</p>
+                <textarea @bind="comment" placeholder="Опишите ситуацию подробнее..." rows="4"></textarea>
+            </div>
+
+            <div class="report-footer">
+                <button class="btn-cancel" @onclick="Close">ОТМЕНА</button>
+                <button class="btn-report-submit" @onclick="Submit" disabled="@(string.IsNullOrEmpty(selectedReason) || isSending)">
+                    @(isSending ? "ОТПРАВКА..." : "ДОЛОЖИТЬ")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .report-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 20px; /* Отступ от краев экрана */
+    }
+
+    .report-card {
+        background: rgba(20, 20, 20, 0.98);
+        width: 100%;
+        max-width: 460px;
+        max-height: 90vh; /* Не более 90% высоты экрана */
+        border-radius: 24px;
+        display: flex;
+        flex-direction: column; /* Чтобы заголовок и футер были на месте, а центр крутился */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+        overflow: hidden;
+    }
+
+    .report-header {
+        padding: 20px 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        flex-shrink: 0;
+    }
+
+        .report-header h3 {
+            font-size: 1.2rem;
+            font-weight: 900;
+            margin: 0;
+            color: #fff;
+        }
+
+    /* ПРОКРУЧИВАЕМАЯ ОБЛАСТЬ */
+    .report-body {
+        padding: 20px 30px;
+        overflow-y: auto; /* Если не влезает — появится скролл внутри */
+        flex-grow: 1;
+    }
+
+        .report-body::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .report-body::-webkit-scrollbar-thumb {
+            background: #E91E63;
+            border-radius: 10px;
+        }
+
+    .label {
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.4);
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+    }
+
+    .reasons-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .reason-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+        padding: 10px 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 12px;
+        transition: 0.2s;
+    }
+
+        .reason-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .reason-item.active {
+            background: rgba(233, 30, 99, 0.1);
+            color: #fff;
+        }
+
+    .radio-custom {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .reason-item.active .radio-custom {
+        border-color: #E91E63;
+    }
+
+        .reason-item.active .radio-custom::after {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            background: #E91E63;
+            border-radius: 50%;
+        }
+
+    textarea {
+        width: 100%;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        padding: 12px;
+        color: white;
+        outline: none;
+        resize: none;
+        font-size: 0.9rem;
+        min-height: 80px;
+    }
+
+    .report-footer {
+        padding: 20px 30px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        flex-shrink: 0;
+    }
+
+    .btn-cancel {
+        background: none;
+        border: none;
+        color: #666;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+        .btn-cancel:hover {
+            color: #fff;
+        }
+
+    .btn-report-submit {
+        background: #E91E63;
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+        .btn-report-submit:hover {
+            background: #ff2e75;
+            transform: translateY(-2px);
+        }
+</style>
+
+@code {
+    private bool IsVisible;
+    private string TargetName = "";
+    private Guid TargetId;
+    private Guid? OrderId;
+    private string selectedReason = "";
+    private string comment = "";
+    private bool isSending = false;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    private List<string> Reasons = new() { "Мошенничество", "Оскорбления / Неадекватность", "Нарушение авторских прав", "Срыв сроков", "Другое" };
+
+    public void Show(Guid targetId, string targetName, Guid? orderId = null)
+    {
+        TargetId = targetId;
+        TargetName = targetName;
+        OrderId = orderId;
+        IsVisible = true;
+        selectedReason = "";
+        comment = "";
+        StateHasChanged();
+    }
+
+    public void Close() { IsVisible = false; StateHasChanged(); }
+
+    private async Task Submit()
+    {
+        if (Auth.User == null) return;
+        isSending = true;
+
+        var complaint = new Complaint
+            {
+                SenderId = Auth.User.Id,
+                TargetUserId = TargetId,
+                OrderId = OrderId,
+                Reason = selectedReason,
+                Comment = comment
+            };
+
+        // 1. Отправляем саму жалобу (Добавил BaseApiUrl для стабильности)
+        var res = await Http.PostAsJsonAsync($"{BaseApiUrl}/api/complaints", complaint);
+
+        if (res.IsSuccessStatusCode)
+        {
+            // 2. ЕСЛИ жалоба была отправлена из страницы заказа (OrderId не пустой)
+            if (OrderId.HasValue && OrderId != Guid.Empty)
+            {
+                await Http.PatchAsync($"{BaseApiUrl}/api/orders/{OrderId}/status?newStatus=Disputed&currentUserId={Auth.User.Id}", null);
+            }
+
+            await JS.InvokeVoidAsync("alert", "Ваше обращение принято. Сделка заморожена до решения арбитража.");
+            Close();
+
+            Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Ошибка сервера. Убедитесь, что ComplaintController создан.");
+        }
+        isSending = false;
+    }
+}
