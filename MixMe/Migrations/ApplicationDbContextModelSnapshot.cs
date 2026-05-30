@@ -431,6 +431,9 @@ namespace MixMe.Migrations
                     b.Property<string>("FullName")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsBanned")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Password")
                         .IsRequired()
                         .HasColumnType("text");

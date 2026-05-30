@@ -1,420 +1,844 @@
 ﻿@page "/admin"
 @using MixMeShared
+@using Microsoft.AspNetCore.SignalR.Client
 @inject HttpClient Http
 @inject MixMeClient.Services.AuthService Auth
 @inject NavigationManager Nav
-@using Microsoft.AspNetCore.SignalR.Client
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<BackgroundGlow />
-
-<div class="admin-container fade-in">
-    <header class="admin-header">
-        <h1>Панель модератора</h1>
-        <div class="admin-tabs">
-            <button class="tab @(activeTab == "posts" ? "active" : "")" @onclick='() => activeTab = "posts"'>Посты</button>
-            <button class="tab @(activeTab == "reviews" ? "active" : "")" @onclick='() => activeTab = "reviews"'>Отзывы</button>
-            <button class="tab @(activeTab == "orders" ? "active" : "")" @onclick='() => activeTab = "orders"'>Арбитраж и Жалобы</button>
+<div class="admin-layout fade-in">
+    @* --- SIDEBAR (Боковая панель) --- *@
+    <aside class="admin-sidebar">
+        <div class="admin-logo">
+            <i class="bi bi-shield-lock-fill"></i>
+            <span>MixMe Admin</span>
         </div>
-    </header>
-
-    <div class="admin-content">
-        @if (activeTab == "posts")
-        {
-            <div class="grid-list">
-                @foreach (var post in pendingPosts)
+        <nav class="admin-nav">
+            <button class="@(activeTab == "stats" ? "active" : "")" @onclick='() => ChangeTab("stats")'>
+                <i class="bi bi-grid-1x2-fill"></i> Дашборд
+            </button>
+            <button class="@(activeTab == "users" ? "active" : "")" @onclick='() => activeTab = "users"'>
+                <i class="bi bi-people-fill"></i> Пользователи
+            </button>
+            <button class="@(activeTab == "posts" ? "active" : "")" @onclick='() => activeTab = "posts"'>
+                <i class="bi bi-images"></i> Посты
+                @if (stats?.PendingPostsCount > 0)
                 {
-                    <div class="admin-card glass-box">
-                        <div class="card-info">
-                            <span class="author">Автор: @post.AuthorName</span>
-                            <p>@post.Content</p>
+                    <span class="badge">@stats.PendingPostsCount</span>
+                }
+            </button>
+            <button class="@(activeTab == "reviews" ? "active" : "")" @onclick='() => activeTab = "reviews"'>
+                <i class="bi bi-star-half"></i> Отзывы
+                @if (stats?.PendingReviewsCount > 0)
+                {
+                    <span class="badge">@stats.PendingReviewsCount</span>
+                }
+            </button>
+            <button class="@(activeTab == "complaints" ? "active" : "")" @onclick='() => activeTab = "complaints"'>
+                <i class="bi bi-exclamation-octagon-fill"></i> Жалобы
+                @if (stats?.ActiveDisputesCount > 0)
+                {
+                    <span class="badge red">@stats.ActiveDisputesCount</span>
+                }
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="connection-status @(hubConnection?.State == HubConnectionState.Connected ? "online" : "offline")">
+                @(hubConnection?.State == HubConnectionState.Connected ? "Live Update On" : "Live Update Off")
+            </div>
+            <button class="btn-back-site" @onclick='() => Nav.NavigateTo("/feed")'>
+                <i class="bi bi-arrow-left-circle me-2"></i> На сайт
+            </button>
+        </div>
+    </aside>
+
+    @* --- MAIN CONTENT (Основная область) --- *@
+    <main class="admin-main-content">
+        @if (isLoading)
+        {
+            <div class="admin-loader"><div class="spinner-premium"></div></div>
+        }
+        else
+        {
+            @* --- СЕКЦИЯ: ДАШБОРД --- *@
+            @if (activeTab == "stats")
+            {
+                <div class="admin-section">
+                    <h2 class="section-title">Состояние платформы</h2>
+                    <div class="stats-grid-admin">
+                        <div class="stat-card-admin pink">
+                            <i class="bi bi-cash-coin"></i>
+                            <div class="s-data">
+                                <span class="val">@stats?.TotalTurnover.ToString("N0") ₽</span>
+                                <span class="lbl">Общий оборот</span>
+                            </div>
                         </div>
-                        <div class="card-actions">
-                            <button class="btn-approve" @onclick="() => ApprovePost(post.Id)">Одобрить</button>
-                            <button class="btn-reject" @onclick="() => RejectPost(post.Id)">Удалить</button>
+                        <div class="stat-card-admin">
+                            <i class="bi bi-people"></i>
+                            <div class="s-data">
+                                <span class="val">@stats?.TotalUsers</span>
+                                <span class="lbl">Пользователей</span>
+                            </div>
+                        </div>
+                        <div class="stat-card-admin blue">
+                            <i class="bi bi-person-badge"></i>
+                            <div class="s-data">
+                                <span class="val">@stats?.TotalEngineers</span>
+                                <span class="lbl">Инженеров</span>
+                            </div>
                         </div>
                     </div>
-                }
-            </div>
-        }
-
-        @if (activeTab == "reviews")
-        {
-            <div class="grid-list">
-                @foreach (var rev in pendingReviews)
-                {
-                    <div class="admin-card glass-box">
-                        <div class="card-info">
-                            <span class="author">От: @rev.ReviewerName | Для: @rev.EngineerName</span>
-                            <div class="stars">⭐ @rev.Rating/5</div>
-                            <p>@rev.Comment</p>
-                        </div>
-                        <div class="card-actions">
-                            <button class="btn-approve" @onclick="() => ApproveReview(rev.Id)">Разрешить</button>
-                            <button class="btn-reject" @onclick="() => RejectReview(rev.Id)">Удалить</button>
+                    <div class="admin-section mt-5">
+                        <h3 class="section-title">Динамика оборота</h3>
+                        <div class="chart-container-admin glass-box">
+                            <canvas id="turnoverChart"></canvas>
                         </div>
                     </div>
-                }
-            </div>
-        }
+                </div>
+            }
 
-        @if (activeTab == "orders")
-        {
-            <div class="grid-list">
-                @foreach (var c in pendingComplaints)
-                {
-                    <div class="admin-card-pro glass-box">
-                        <div class="card-badge">
-                            <span class="badge-pink">@c.Reason</span>
-                            <span class="date">@c.CreatedAt.ToString("dd.MM HH:mm")</span>
+            @* --- СЕКЦИЯ: ПОЛЬЗОВАТЕЛИ --- *@
+            @if (activeTab == "users")
+            {
+                <div class="admin-section">
+                    <div class="section-header-admin">
+                        <h2 class="section-title">Управление доступом</h2>
+                        <div class="admin-search-box">
+                            <i class="bi bi-search"></i>
+                            <input type="text" @bind="userSearch" @bind:event="oninput" @onkeyup="LoadUsers" placeholder="Поиск по нику или email..." />
                         </div>
+                    </div>
 
-                        <div class="card-body-admin">
-                            <div class="user-info-row">
-                                <span class="label">Инициатор:</span> <b>@c.SenderName</b>
-                                <i class="bi bi-arrow-right mx-2"></i>
-                                <span class="label">На кого:</span> <b>@c.TargetName</b>
-                            </div>
+                    <div class="admin-table-wrapper">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Имя пользователя</th>
+                                    <th>Email</th>
+                                    <th>Статус</th>
+                                    <th>Действие</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var u in users)
+                                {
+                                    <tr>
+                                        <td><b>@u.Username</b></td>
+                                        <td>@u.Email</td>
+                                        <td>
+                                            <span class="u-status @(u.IsBanned ? "banned" : "active")">
+                                                @(u.IsBanned ? "Забанен" : "Активен")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn-ban-toggle @(u.IsBanned ? "unban" : "ban")" @onclick="() => ToggleBan(u)">
+                                                @(u.IsBanned ? "Разбанить" : "Забанить")
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
 
-                            <div class="comment-box">
-                                <i class="bi bi-chat-quote me-2"></i> "@c.Comment"
-                            </div>
-
-                            @if (c.OrderId.HasValue && c.OrderId != Guid.Empty)
-                            {
-                                <div class="order-finance-info">
-                                    <i class="bi bi-cash-stack me-2"></i> Сумма сделки: <b>@c.OrderAmount ₽</b>
+            @* --- СЕКЦИЯ: ПОСТЫ --- *@
+            @if (activeTab == "posts")
+            {
+                <div class="admin-section">
+                    <h2 class="section-title">Модерация контента</h2>
+                    <div class="mod-grid-admin">
+                        @foreach (var p in pendingPosts)
+                        {
+                            <div class="mod-card-admin glass-box fade-in-up">
+                                <div class="m-author">
+                                    <i class="bi bi-person-circle me-2"></i> @p.AuthorName
                                 </div>
-                            }
-                        </div>
 
-                        <div class="card-actions-pro">
-                            @if (c.OrderId.HasValue && c.OrderId != Guid.Empty)
-                            {
-                                @* Кнопки для финансовых споров *@
-                                <button class="btn-admin pay" @onclick='() => ResolveOrder(c.OrderId.Value, "Pay", c.Id)'>
-                                    <i class="bi bi-check2-circle"></i> Выплатить инженеру
-                                </button>
-                                <button class="btn-admin refund" @onclick='() => ResolveOrder(c.OrderId.Value, "Refund", c.Id)'>
-                                    <i class="bi bi-arrow-counterclockwise"></i> Вернуть заказчику
-                                </button>
-                                <button class="btn-admin view" @onclick='() => Nav.NavigateTo($"/order/{c.OrderId}")'>
-                                    <i class="bi bi-eye"></i> Чат
-                                </button>
-                            }
-                            else
-                            {
-                                @* Кнопка для обычной жалобы *@
-                                <button class="btn-admin approve-simple" @onclick="() => ResolveComplaint(c.Id)">
-                                    <i class="bi bi-check-all"></i> Рассмотрено
-                                </button>
-                            }
-                        </div>
+                                @if (!string.IsNullOrEmpty(p.ImageUrl))
+                                {
+                                    <div class="m-preview-img">
+                                        <img src="@GetFullUrl(p.ImageUrl)" alt="post image" />
+                                    </div>
+                                }
+
+                                <div class="m-content">@p.Content</div>
+
+                                @if (!string.IsNullOrEmpty(p.AudioUrl))
+                                {
+                                    <div class="m-preview-audio">
+                                        <i class="bi bi-music-note-beamed me-2"></i> Аудио вложение
+                                    </div>
+                                }
+
+                                <div class="m-btns">
+                                    <button class="btn-admin-act green" @onclick="() => UpdatePost(p.Id, ModerationStatus.Approved)">
+                                        <i class="bi bi-check-lg"></i> Одобрить
+                                    </button>
+                                    <button class="btn-admin-act red" @onclick="() => UpdatePost(p.Id, ModerationStatus.Rejected)">
+                                        <i class="bi bi-trash3"></i> Удалить
+                                    </button>
+                                </div>
+                            </div>
+                        }
                     </div>
-                }
-            </div>
+                </div>
+            }
+
+            @* --- СЕКЦИЯ: ОТЗЫВЫ (ВОССТАНОВЛЕНО) --- *@
+            @if (activeTab == "reviews")
+            {
+                <div class="admin-section">
+                    <h2 class="section-title">Модерация отзывов</h2>
+                    <div class="grid-list-admin">
+                        @foreach (var rev in pendingReviews)
+                        {
+                            <div class="mod-card-admin">
+                                <div class="m-info">
+                                    <span class="m-author">От: @rev.ReviewerName | Для: @rev.EngineerName</span>
+                                    <div class="m-stars">⭐ @rev.Rating/5</div>
+                                    <p class="m-content">@rev.Comment</p>
+                                </div>
+                                <div class="m-btns">
+                                    <button class="btn-admin-act green" @onclick="() => ApproveReview(rev.Id)">Одобрить</button>
+                                    <button class="btn-admin-act red" @onclick="() => RejectReview(rev.Id)">Удалить</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* --- СЕКЦИЯ: ЖАЛОБЫ И АРБИТРАЖ --- *@
+            @if (activeTab == "complaints")
+            {
+                <div class="admin-section">
+                    <h2 class="section-title">Арбитраж и Жалобы</h2>
+                    <div class="complaints-list-admin">
+                        @foreach (var c in complaints)
+                        {
+                            <div class="complaint-item-admin">
+                                <div class="c-head">
+                                    <span class="c-reason">@c.Reason</span>
+                                    <span class="c-date">@c.CreatedAt.ToString("g")</span>
+                                </div>
+                                <div class="c-users"><b>@c.SenderName</b> жалуется на <b>@c.TargetName</b></div>
+                                <div class="c-comment">"@c.Comment"</div>
+                                <div class="c-actions">
+                                    @if (c.OrderId != null && c.OrderId != Guid.Empty)
+                                    {
+                                        <button class="btn-admin-act green" @onclick='() => ResolveOrder(c.OrderId.Value, "Pay", c.Id)'>Выплатить инженеру (@c.OrderAmount ₽)</button>
+                                        <button class="btn-admin-act red" @onclick='() => ResolveOrder(c.OrderId.Value, "Refund", c.Id)'>Вернуть деньги</button>
+                                        <button class="btn-admin-act blue" @onclick='() => Nav.NavigateTo($"/order/{c.OrderId}")'>Чат заказа</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn-admin-act" @onclick="() => ResolveComplaint(c.Id)">Пометить решенным</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
         }
-    </div>
+    </main>
 </div>
 
 <style>
+    /* ПЕРЕМЕННЫЕ И БАЗОВЫЙ МАКЕТ */
     :root {
         --pink: #E91E63;
-        --pink-hover: #ff2e75;
     }
 
-    .admin-card-pro {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 24px;
-        padding: 25px;
-        margin-bottom: 20px;
+    .admin-layout {
+        position: fixed;
+        inset: 0;
+        background: #0B0B0B;
+        z-index: 9999;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+    }
+
+    /* САЙДБАР (SIDEBAR) */
+    .admin-sidebar {
+        background: #111;
+        border-right: 1px solid rgba(255,255,255,0.05);
+        display: flex;
+        flex-direction: column;
+        padding: 40px 0;
+    }
+
+    .admin-logo {
+        padding: 0 30px 40px;
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: var(--pink);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .admin-nav {
+        flex-grow: 1;
+    }
+
+        .admin-nav button {
+            width: 100%;
+            background: transparent;
+            border: none;
+            padding: 15px 30px;
+            color: rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-weight: 700;
+            transition: 0.3s;
+            border-right: 3px solid transparent;
+            text-align: left;
+            cursor: pointer;
+        }
+
+            .admin-nav button i {
+                font-size: 1.2rem;
+                transition: 0.3s;
+            }
+
+            .admin-nav button:hover,
+            .admin-nav button.active {
+                background: rgba(233, 30, 99, 0.05);
+                color: white;
+                border-right-color: var(--pink);
+            }
+
+                .admin-nav button:hover i {
+                    transform: scale(1.2);
+                }
+
+    /* ВСПОМОГАТЕЛЬНЫЕ ЭЛЕМЕНТЫ САЙДБАРА */
+    .badge {
+        background: #444;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 8px;
+        margin-left: auto;
+    }
+
+        .badge.red {
+            background: #ff5252;
+        }
+
+    .sidebar-footer {
+        padding: 30px;
+    }
+
+    .connection-status {
+        font-size: 0.7rem;
+        margin-bottom: 10px;
+        padding-left: 5px;
+    }
+
+        .connection-status.online {
+            color: #4CAF50;
+        }
+
+        .connection-status.offline {
+            color: #ff5252;
+        }
+
+    .btn-back-site {
+        width: 100%;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: white;
+        padding: 12px;
+        border-radius: 12px;
+        cursor: pointer;
         transition: 0.3s;
     }
 
-        .admin-card-pro:hover {
-            border-color: var(--pink);
-            box-shadow: 0 10px 30px rgba(233, 30, 99, 0.1);
-        }
-
-    .card-badge {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 15px;
+    /* ОСНОВНОЙ КОНТЕНТ */
+    .admin-main-content {
+        padding: 50px;
+        overflow-y: auto;
+        color: white;
     }
 
-    .badge-pink {
-        background: rgba(233, 30, 99, 0.2);
+    .section-title {
+        font-size: 2rem;
+        font-weight: 900;
+        margin-bottom: 30px;
+    }
+
+    /* МОДЕРАЦИЯ (СЕТКА И КАРТОЧКИ) */
+    .mod-grid-admin {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .mod-card-admin {
+        background: #1a1a1a;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 25px;
+        border-radius: 25px;
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        border: 1px solid rgba(255,255,255,0.05);
+        transition: 0.3s;
+    }
+
+    .m-author {
         color: var(--pink);
-        padding: 5px 15px;
-        border-radius: 10px;
         font-weight: 800;
-        font-size: 0.75rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
     }
 
-    .comment-box {
-        background: rgba(0,0,0,0.2);
-        padding: 15px;
-        border-radius: 14px;
-        margin: 15px 0;
-        color: #eee;
-        font-style: italic;
-        border-left: 3px solid var(--pink);
+    .m-stars {
+        color: #FFC107;
+        margin: 5px 0;
+        font-weight: bold;
     }
 
-    .btn-admin {
-        border: none;
-        padding: 10px 20px;
-        border-radius: 12px;
+    .m-content {
+        font-size: 0.95rem;
+        color: #ccc;
+        line-height: 1.4;
+    }
+
+    .m-preview-img {
+        width: 100%;
+        height: 180px;
+        border-radius: 15px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+        .m-preview-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .m-preview-audio {
+        background: rgba(233, 30, 99, 0.1);
+        color: var(--pink);
+        padding: 10px;
+        border-radius: 10px;
+        font-size: 0.8rem;
         font-weight: 700;
-        font-size: 0.85rem;
-        cursor: pointer;
-        transition: 0.3s;
-        display: flex;
-        align-items: center;
-        gap: 8px;
     }
 
-        .btn-admin.pay {
-            background: var(--pink);
-            color: white;
-        }
+    /* КНОПКИ ДЕЙСТВИЙ */
+    .btn-admin-act {
+        border: none;
+        padding: 10px 18px;
+        border-radius: 10px;
+        font-weight: 800;
+        cursor: pointer;
+        margin-left: 10px;
+        transition: 0.2s;
+    }
 
-        .btn-admin.refund {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-
-        .btn-admin.view {
-            background: #00bcd4;
-            color: white;
-        }
-
-        .btn-admin.approve-simple {
+        .btn-admin-act.green {
             background: #4CAF50;
             color: white;
         }
 
-        .btn-admin:hover {
-            transform: translateY(-2px);
-            filter: brightness(1.2);
-        }
-
-    .card-actions-pro {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-top: 20px;
-    }
-    .admin-container {
-        padding: 100px 50px;
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-
-    .admin-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 40px;
-    }
-
-    .admin-tabs {
-        display: flex;
-        gap: 15px;
-        background: rgba(255,255,255,0.05);
-        padding: 8px;
-        border-radius: 15px;
-    }
-
-    .tab {
-        background: transparent;
-        border: none;
-        color: #888;
-        padding: 10px 25px;
-        border-radius: 10px;
-        cursor: pointer;
-        transition: 0.3s;
-        font-weight: 700;
-    }
-
-        .tab.active {
-            background: #E91E63;
+        .btn-admin-act.red {
+            background: #ff5252;
             color: white;
         }
 
-    .admin-card {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 25px;
-        margin-bottom: 20px;
-        border-radius: 25px;
-    }
+        .btn-admin-act.blue {
+            background: #00bcd4;
+            color: white;
+        }
 
-    .card-info .author {
-        color: #E91E63;
+        .btn-admin-act:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+    /* КНОПКИ БАНА */
+    .btn-ban-toggle {
+        border: 1px solid transparent;
+        padding: 8px 16px;
+        border-radius: 12px;
         font-weight: 800;
         font-size: 0.8rem;
+        cursor: pointer;
+        transition: 0.3s;
         text-transform: uppercase;
     }
 
-    .card-info p {
-        margin-top: 10px;
-        font-size: 1.1rem;
-        color: #eee;
+        .btn-ban-toggle.ban {
+            background: rgba(255, 82, 82, 0.1);
+            color: #ff5252;
+            border-color: rgba(255, 82, 82, 0.2);
+        }
+
+            .btn-ban-toggle.ban:hover {
+                background: #ff5252;
+                color: white;
+            }
+
+        .btn-ban-toggle.unban {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4CAF50;
+            border-color: rgba(76, 175, 80, 0.2);
+        }
+
+            .btn-ban-toggle.unban:hover {
+                background: #4CAF50;
+                color: white;
+            }
+
+    /* ТАБЛИЦА */
+    .admin-table-wrapper {
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 25px;
+        padding: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .card-actions {
+    .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .admin-table th {
+            background: #222;
+            padding: 15px;
+            text-align: left;
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .admin-table td {
+            padding: 20px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .admin-table b {
+            color: #fff;
+            font-size: 1.05rem;
+        }
+
+        .admin-table tr:hover td {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+    .u-status {
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 900;
+    }
+
+        .u-status.active {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4CAF50;
+        }
+
+        .u-status.banned {
+            background: rgba(255, 82, 82, 0.1);
+            color: #ff5252;
+        }
+
+    /* СТАТИСТИКА */
+    .stats-grid-admin {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 25px;
+    }
+
+    .stat-card-admin {
+        background: #1a1a1a;
+        padding: 30px;
+        border-radius: 25px;
         display: flex;
-        gap: 10px;
+        align-items: center;
+        gap: 20px;
+        border: 1px solid rgba(255,255,255,0.05);
     }
 
-    .btn-approve {
-        background: #4CAF50;
-        border: none;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 12px;
-        font-weight: 700;
+        .stat-card-admin i {
+            font-size: 2.5rem;
+            color: #666;
+        }
+
+        .stat-card-admin.pink i {
+            color: var(--pink);
+        }
+
+        .stat-card-admin.blue i {
+            color: #00bcd4;
+        }
+
+        .stat-card-admin .val {
+            display: block;
+            font-size: 1.8rem;
+            font-weight: 900;
+        }
+
+        .stat-card-admin .lbl {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.3);
+            text-transform: uppercase;
+        }
+
+    /* ЖАЛОБЫ (COMPLAINTS) */
+    .complaint-item-admin {
+        background: #1a1a1a;
+        padding: 25px;
+        border-radius: 20px;
+        margin-bottom: 20px;
+        border-left: 5px solid var(--pink);
     }
 
-    .btn-reject {
-        background: #F44336;
-        border: none;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 12px;
-        font-weight: 700;
+    .c-head {
+        display: flex;
+        justify-content: space-between;
     }
 
-    .btn-view {
-        background: #2196F3;
-        border: none;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 12px;
-        font-weight: 700;
+    .c-reason {
+        color: var(--pink);
+        font-weight: 900;
+        text-transform: uppercase;
+        font-size: 0.8rem;
     }
+
+    .c-comment {
+        background: rgba(0,0,0,0.2);
+        padding: 15px;
+        border-radius: 12px;
+        margin: 15px 0;
+        font-style: italic;
+        color: #ccc;
+    }
+
+    .chart-container-admin {
+        height: 350px;
+        width: 100%;
+        padding: 30px;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    /* Контейнер поиска */
+    .admin-search-box {
+        position: relative;
+        width: 350px; /* Фиксированная ширина для аккуратности */
+        margin-bottom: 5px;
+    }
+
+        /* Иконка лупы внутри поиска */
+        .admin-search-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.3); /* Приглушенный цвет */
+            pointer-events: none; /* Чтобы иконка не мешала клику по инпуту */
+            transition: 0.3s;
+        }
+
+        /* Само поле ввода */
+        .admin-search-box input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03); /* Почти прозрачный фон */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 15px 12px 45px; /* Отступ слева под иконку */
+            color: white;
+            font-weight: 600;
+            outline: none;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+            /* Эффект при наведении */
+            .admin-search-box input:hover {
+                background: rgba(255, 255, 255, 0.05);
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+
+            /* Эффект при фокусе (клике) */
+            .admin-search-box input:focus {
+                background: rgba(255, 255, 255, 0.07);
+                border-color: var(--pink); /* Розовый акцент как в логотипе */
+                box-shadow: 0 0 15px rgba(233, 30, 99, 0.15); /* Мягкое розовое свечение */
+            }
+
+                /* Изменение цвета иконки при фокусе на инпуте */
+                .admin-search-box input:focus + i,
+                .admin-search-box:focus-within i {
+                    color: var(--pink);
+                }
+
+            /* Стилизация плейсхолдера (подсказки) */
+            .admin-search-box input::placeholder {
+                color: rgba(255, 255, 255, 0.2);
+                font-weight: 400;
+            }
 </style>
 
 @code {
-    private string activeTab = "posts";
+    private string activeTab = "stats";
+    private string userSearch = "";
+    private bool isLoading = true;
+    private string BaseApiUrl = "https://localhost:7237";
+
+    private AdminDashboardStatsDto? stats;
+    private List<AdminUserListItemDto> users = new();
     private List<AdminPostDto> pendingPosts = new();
     private List<AdminReviewDto> pendingReviews = new();
-    private List<AdminOrderDto> disputedOrders = new();
-    private List<AdminComplaintDto> pendingComplaints = new();
-    private string BaseApiUrl = "https://localhost:7237";
+    private List<AdminComplaintDto> complaints = new();
 
     private HubConnection? hubConnection;
 
     protected override async Task OnInitializedAsync()
     {
-        if (Auth.User?.RoleId != 3) { Nav.NavigateTo("/"); return; }
+        if (Auth.User?.RoleId != 3) { Nav.NavigateTo("/feed"); return; }
 
-        await LoadData();
+        await RefreshAll();
 
-        // Настраиваем SignalR для мгновенного обновления
+        // SignalR для живого обновления
         hubConnection = new HubConnectionBuilder()
             .WithUrl($"{BaseApiUrl}/chathub")
             .WithAutomaticReconnect()
             .Build();
 
-        // Слушаем сигнал "Обнови админку"
         hubConnection.On("UpdateAdminPanel", async () =>
         {
-            await LoadData();
+            await RefreshAll();
             await InvokeAsync(StateHasChanged);
         });
 
         await hubConnection.StartAsync();
     }
 
-    private async Task LoadData()
+    private async Task RefreshAll()
     {
+        isLoading = true;
         try
         {
+            // Загружаем все данные
+            stats = await Http.GetFromJsonAsync<AdminDashboardStatsDto>($"{BaseApiUrl}/api/Admin/stats");
+            await LoadUsers();
             pendingPosts = await Http.GetFromJsonAsync<List<AdminPostDto>>($"{BaseApiUrl}/api/Admin/posts/pending") ?? new();
             pendingReviews = await Http.GetFromJsonAsync<List<AdminReviewDto>>($"{BaseApiUrl}/api/Admin/reviews/pending") ?? new();
-            disputedOrders = await Http.GetFromJsonAsync<List<AdminOrderDto>>($"{BaseApiUrl}/api/Admin/orders/disputed") ?? new();
-            pendingComplaints = await Http.GetFromJsonAsync<List<AdminComplaintDto>>($"{BaseApiUrl}/api/Admin/complaints/pending") ?? new();
+            complaints = await Http.GetFromJsonAsync<List<AdminComplaintDto>>($"{BaseApiUrl}/api/Admin/complaints/pending") ?? new();
+
+            // --- ИСПРАВЛЕНИЕ ТУТ ---
+            isLoading = false; // Сначала выключаем лоадер
+            StateHasChanged(); // Принудительно обновляем UI, чтобы появился canvas в DOM
+
+            await Task.Delay(150); // Даем браузеру время отрисовать элементы
+            await RenderTurnoverChart(); // Теперь рисуем график
         }
-        catch (Exception ex) { Console.WriteLine(ex.Message); }
+        catch (Exception ex)
+        {
+            isLoading = false;
+            Console.WriteLine($"Ошибка загрузки статистики: {ex.Message}");
+        }
     }
-    private async Task ResolveComplaint(int id)
+    private async Task RenderTurnoverChart()
     {
-        var res = await Http.PatchAsync($"{BaseApiUrl}/api/Admin/complaints/{id}/resolve", null);
+        if (stats?.TurnoverHistory == null || !stats.TurnoverHistory.Any()) return;
+
+        var labels = stats.TurnoverHistory.Select(x => x.Month).ToArray();
+        var data = stats.TurnoverHistory.Select(x => x.Amount).ToArray();
+
+        // Вызываем JS функцию для отрисовки
+        await JS.InvokeVoidAsync("renderAdminChart", labels, data);
+    }
+    private async Task ChangeTab(string tabName)
+    {
+        activeTab = tabName;
+        if (tabName == "stats")
+        {
+            StateHasChanged();
+            await Task.Delay(100);
+            await RenderTurnoverChart();
+        }
+    }
+
+    private async Task LoadUsers() =>
+        users = await Http.GetFromJsonAsync<List<AdminUserListItemDto>>($"{BaseApiUrl}/api/Admin/users?search={userSearch}") ?? new();
+
+    private async Task ToggleBan(AdminUserListItemDto u)
+    {
+        if (u.Id == Auth.User?.Id)
+        {
+            await JS.InvokeVoidAsync("alert", "Ошибка: Вы пытаетесь заблокировать собственную учетную запись администратора!");
+            return;
+        }
+
+        var res = await Http.PatchAsync($"{BaseApiUrl}/api/Admin/users/{u.Id}/ban", null);
         if (res.IsSuccessStatusCode)
         {
-            await LoadData();
+            u.IsBanned = !u.IsBanned;
+        }
+        else
+        {
+            var error = await res.Content.ReadAsStringAsync();
+            await JS.InvokeVoidAsync("alert", error);
         }
     }
-
-    // Методы Approve/Reject (оставляем как были)
-    private async Task ApprovePost(int id)
+    private string GetFullUrl(string? url)
     {
-        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/posts/{id}/status?status=Approved", null);
-        await LoadData();
+        if (string.IsNullOrEmpty(url)) return "images/default-avatar.png";
+        return url.StartsWith("http") ? url : $"{BaseApiUrl}/{url.TrimStart('/')}";
     }
 
-    private async Task RejectPost(int id)
+    private async Task UpdatePost(int id, ModerationStatus status)
     {
-        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/posts/{id}/status?status=Rejected", null);
-        await LoadData();
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/posts/{id}/status?status={status}", null);
+        await RefreshAll();
     }
 
     private async Task ApproveReview(int id)
     {
         await Http.PatchAsync($"{BaseApiUrl}/api/Admin/reviews/{id}/approve", null);
-        await LoadData();
+        await RefreshAll();
     }
 
     private async Task RejectReview(int id)
     {
         await Http.DeleteAsync($"{BaseApiUrl}/api/Admin/reviews/{id}/reject");
-        await LoadData();
+        await RefreshAll();
     }
 
     private async Task ResolveOrder(Guid id, string decision, int complaintId)
     {
-        // Обновляем URL, чтобы добавить complaintId
-        var url = $"{BaseApiUrl}/api/Admin/orders/{id}/resolve?decision={decision}&complaintId={complaintId}";
-
-        var res = await Http.PatchAsync(url, null);
-
-        if (res.IsSuccessStatusCode)
-        {
-            await LoadData(); // Перезагружаем список, чтобы жалоба исчезла
-        }
-        else
-        {
-            // На всякий случай выведем ошибку в консоль, если что-то пойдет не так
-            var error = await res.Content.ReadAsStringAsync();
-            Console.WriteLine($"Ошибка арбитража: {error}");
-        }
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/orders/{id}/resolve?decision={decision}&complaintId={complaintId}", null);
+        await RefreshAll();
     }
 
-    // Очистка при закрытии
+    private async Task ResolveComplaint(int id)
+    {
+        await Http.PatchAsync($"{BaseApiUrl}/api/Admin/complaints/{id}/resolve", null);
+        await RefreshAll();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (hubConnection is not null) await hubConnection.DisposeAsync();
     }
 
-    // DTO классы (те же самые)
-    public class AdminPostDto { public int Id { get; set; } public string Content { get; set; } = ""; public string AuthorName { get; set; } = ""; }
-    public class AdminReviewDto { public int Id { get; set; } public int Rating { get; set; } public string Comment { get; set; } = ""; public string ReviewerName { get; set; } = ""; public string EngineerName { get; set; } = ""; }
-    public class AdminOrderDto { public Guid Id { get; set; } public decimal TotalAmount { get; set; } public string Customer { get; set; } = ""; public string Engineer { get; set; } = ""; }
-    public class AdminComplaintDto
+    // DTO классы
+    public class AdminPostDto
     {
         public int Id { get; set; }
-        public string Reason { get; set; } = "";
-        public string? Comment { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public string SenderName { get; set; } = "";
-        public string TargetName { get; set; } = "";
-        public Guid? OrderId { get; set; }
-        public decimal OrderAmount { get; set; }
+        public string Content { get; set; } = ""; public string AuthorName { get; set; } = ""; public string? ImageUrl { get; set; }  // Добавлено
+        public string? AudioUrl { get; set; }
     }
+    public class AdminReviewDto { public int Id { get; set; } public int Rating { get; set; } public string Comment { get; set; } = ""; public string ReviewerName { get; set; } = ""; public string EngineerName { get; set; } = ""; }
+    public class AdminComplaintDto { public int Id { get; set; } public string Reason { get; set; } = ""; public string? Comment { get; set; } public DateTime CreatedAt { get; set; } public Guid? OrderId { get; set; } public string SenderName { get; set; } = ""; public string TargetName { get; set; } = ""; public decimal OrderAmount { get; set; } }
 }

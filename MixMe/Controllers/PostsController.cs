@@ -26,7 +26,9 @@ public class PostsController : ControllerBase
     {
         // 1. Загружаем посты: только одобренные модератором ИЛИ личные посты пользователя (даже если они еще не проверены)
         var posts = await _context.Posts
-            .Where(p => p.Status == ModerationStatus.Approved || p.UserId == currentUserId)
+// Показываем, если (Одобрено ИЛИ это мой пост), НО только если статус НЕ "Rejected"
+.Where(p => (p.Status == ModerationStatus.Approved || p.UserId == currentUserId)
+             && p.Status != ModerationStatus.Rejected)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
 

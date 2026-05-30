@@ -30,5 +30,6 @@ namespace MixMeShared
         public string? AvatarUrl { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsBanned { get; set; } = false;
     }
 }

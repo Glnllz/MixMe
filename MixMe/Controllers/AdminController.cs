@@ -46,10 +46,20 @@ public class AdminController : ControllerBase
         var post = await _context.Posts.FindAsync(id);
         if (post == null) return NotFound();
 
-        post.Status = status;
-        await _context.SaveChangesAsync();
+        if (status == ModerationStatus.Rejected)
+        {
+            // Если админ отклонил — просто удаляем запись из БД
+            _context.Posts.Remove(post);
+        }
+        else
+        {
+            // Если одобрил — меняем статус
+            post.Status = status;
+        }
 
-        // ЕСЛИ ПОСТ ОДОБРЕН — отправляем сигнал всем клиентам
+        await _context.SaveChangesAsync();
+        await _hubContext.Clients.All.SendAsync("PostApproved");
+
         if (status == ModerationStatus.Approved)
         {
             await _hubContext.Clients.All.SendAsync("PostApproved", id);
@@ -200,5 +210,83 @@ public class AdminController : ControllerBase
         c.IsResolved = true;
         await _context.SaveChangesAsync();
         return Ok();
+    }
+    // --- 1. СТАТИСТИКА ДЛЯ ДАШБОРДА ---
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats()
+    {
+        var completedOrders = await _context.Orders
+            .Where(o => o.Status == "Completed" && o.CompletedAt != null)
+            .ToListAsync();
+
+        var stats = new AdminDashboardStatsDto
+        {
+            TotalUsers = await _context.Profiles.CountAsync(),
+            TotalEngineers = await _context.Profiles.CountAsync(p => p.RoleId == 2),
+            TotalCustomers = await _context.Profiles.CountAsync(p => p.RoleId == 1),
+            TotalTurnover = completedOrders.Sum(o => o.TotalAmount),
+            PendingPostsCount = await _context.Posts.CountAsync(p => p.Status == ModerationStatus.Pending),
+            PendingReviewsCount = await _context.Reviews.CountAsync(r => r.Status == ModerationStatus.Pending),
+            ActiveDisputesCount = await _context.Complaints.CountAsync(c => !c.IsResolved && c.OrderId != null),
+
+            // Группируем завершенные заказы по месяцам
+            // В AdminController.cs внутри GetStats():
+            TurnoverHistory = completedOrders
+    .GroupBy(o => new { o.CompletedAt.Value.Year, o.CompletedAt.Value.Month })
+    .OrderBy(g => g.Key.Year)    // Сначала по году
+    .ThenBy(g => g.Key.Month)   // Затем по месяцу
+    .Select(g => new TurnoverChartItem
+    {
+        Month = new DateTime(g.Key.Year, g.Key.Month, 1).ToString("MMM"),
+        Amount = g.Sum(x => x.TotalAmount)
+    })
+    .ToList()
+        };
+        return Ok(stats);
+    }
+
+    // --- 2. СПИСОК ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ТАБЛИЦЫ ---
+    [HttpGet("users")]
+    public async Task<IActionResult> GetUsers([FromQuery] string? search)
+    {
+        var query = _context.Profiles.AsQueryable();
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            query = query.Where(u => u.Username.Contains(search) || u.Email.Contains(search));
+        }
+
+        var users = await query
+            .Select(u => new AdminUserListItemDto
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Email = u.Email,
+                RoleId = u.RoleId,
+                IsBanned = u.IsBanned,
+                CreatedAt = u.CreatedAt
+            })
+            .OrderByDescending(u => u.CreatedAt)
+            .ToListAsync();
+
+        return Ok(users);
+    }
+
+    // --- 3. БАН / РАЗБАН ПОЛЬЗОВАТЕЛЯ ---
+    [HttpPatch("users/{id}/ban")]
+    public async Task<IActionResult> ToggleBan(Guid id)
+    {
+        // Получаем ID текущего пользователя из токена
+        var currentAdminId = Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
+
+        if (id == currentAdminId)
+            return BadRequest("Вы не можете забанить самого себя.");
+
+        var user = await _context.Profiles.FindAsync(id);
+        if (user == null) return NotFound();
+
+        user.IsBanned = !user.IsBanned;
+        await _context.SaveChangesAsync();
+        return Ok(user.IsBanned);
     }
 }

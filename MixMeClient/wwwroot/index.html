@@ -63,6 +63,7 @@
             flex-direction: column;
         }
     </style>
+    <!-- Подключение библиотеки Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -91,7 +92,6 @@
         window.updateCursorGlow = (x, y) => {
             const glow = document.getElementById('cursorGlow');
             if (glow) {
-                // Используем requestAnimationFrame для плавной анимации (60 FPS)
                 window.requestAnimationFrame(() => {
                     glow.style.left = x + 'px';
                     glow.style.top = y + 'px';
@@ -99,33 +99,32 @@
             }
         };
     </script>
+
+    <!-- Скрипт прокрутки вниз -->
     <script>
         window.scrollToBottom = (elementId) => {
             const el = document.getElementById(elementId);
             if (el) {
-                // Используем setTimeout 0, чтобы гарантированно попасть в конец очереди выполнения
                 setTimeout(() => {
                     el.scrollTo({
                         top: el.scrollHeight,
-                        behavior: 'smooth' // Добавим плавность, если хотите (или 'auto' для мгновенного)
+                        behavior: 'smooth'
                     });
                 }, 50);
             }
         };
     </script>
+
+    <!-- Скрипт отрисовки графика доходов -->
     <script>
         window.renderIncomeChart = (labels, data) => {
             const canvas = document.getElementById('incomeChart');
-
-            // ПРОВЕРКА: Если элемента нет, выходим из функции
             if (!canvas) {
                 console.warn("Canvas 'incomeChart' not found in DOM yet.");
                 return;
             }
 
             const ctx = canvas.getContext('2d');
-
-            // Очистка старого графика, если он был (Chart.js создает объект на элементе)
             const existingChart = Chart.getChart(canvas);
             if (existingChart) {
                 existingChart.destroy();
@@ -165,6 +164,57 @@
                             grid: { display: false },
                             ticks: { color: 'rgba(255,255,255,0.5)' }
                         }
+                    }
+                }
+            });
+        };
+    </script>
+
+    <!-- Скрипт отрисовки графика оборота для админки -->
+    <script>
+        window.renderAdminChart = (labels, data) => {
+            const canvas = document.getElementById('turnoverChart');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+
+            // Если график уже был создан, удаляем его перед перерисовкой
+            if (window.myAdminChart) {
+                window.myAdminChart.destroy();
+            }
+
+            window.myAdminChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Оборот (₽)',
+                        data: data,
+                        borderColor: '#E91E63', // Твой розовый
+                        backgroundColor: 'rgba(233, 30, 99, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4, // Сглаживание линий
+                        pointRadius: 6,
+                        pointBackgroundColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#888' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#888' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
                     }
                 }
             });

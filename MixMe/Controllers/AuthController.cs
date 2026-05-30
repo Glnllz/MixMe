@@ -33,6 +33,10 @@ public class AuthController : ControllerBase
         // Проверяем пароль
         if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
             return Unauthorized("Неверный email или пароль");
+        if (user.IsBanned)
+        {
+            return BadRequest("Ваш аккаунт заблокирован администратором.");
+        }
 
         // --- ГЕНЕРАЦИЯ JWT ТОКЕНА ---
         var tokenHandler = new JwtSecurityTokenHandler();
