@@ -19,67 +19,7 @@
     }
     else
     {
-        @* НАВИГАЦИЯ *@
-        @if (ShowNavigation())
-        {
-            <header class="top-nav fade-in-down">
-                <div class="nav-content">
-                    <div class="brand" @onclick='() => Nav.NavigateTo("/feed")'>
-                        <img src="images/logo.png" alt="logo" />
-                        <span>MixMe</span>
-                    </div>
-                    <nav class="links">
-                        <NavLink href="/feed" ActiveClass="active">Лента</NavLink>
-                        <NavLink href="/search" ActiveClass="active">Поиск</NavLink>
-                        <NavLink href="/rank" ActiveClass="active">Рейтинг</NavLink>
-
-                        <div class="nav-link-wrapper">
-                            <NavLink href="/orders" ActiveClass="active">Мои проекты</NavLink>
-                            @if (hasNewProjectNotification)
-                            {
-                                <div class="notification-badge-dot pulse-dot"></div>
-                            }
-                        </div>
-                        @if (Auth.User?.RoleId == 3) // Предполагаем, что 3 - это Admin
-                        {
-                            <NavLink href="/admin" ActiveClass="active" class="text-warning">
-                                <i class="bi bi-shield-lock-fill me-1"></i> Админ
-                            </NavLink>
-                        }
-
-                        @* <div class="nav-link-wrapper">
-                            <NavLink href="/chats" ActiveClass="active">Сообщения</NavLink>
-                            @if (hasNewMessageNotification)
-                            {
-                                <div class="notification-badge-dot pulse-dot"></div>
-                            }
-                        </div> *@
-                    </nav>
-                    <div class="user-controls">
-                        <NotificationBell @ref="notifBell" />
-                        <div class="search-trigger" @onclick='() => Nav.NavigateTo("/search")'>
-                            <i class="bi bi-search"></i>
-                        </div>
-                        @if (Auth.IsLoggedIn)
-                        {
-                            <div class="profile-link" @onclick='() => Nav.NavigateTo("/profile")'>
-                                <div class="profile-avatar-container">
-                                    @if (string.IsNullOrEmpty(Auth.User?.AvatarUrl))
-                                    {
-                                        <i class="bi bi-person-fill"></i>
-                                    }
-                                    else
-                                    {
-                                        <img src="@GetFullUrl(Auth.User.AvatarUrl)" alt="me" />
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </header>
-        }@* НАВИГАЦИЯ *@
-        @* Добавляем условие: показывать только если это не админ *@
+        @* 1. ШАПКА: Показываем только если это НЕ страница входа и НЕ админ *@
         @if (ShowNavigation() && Auth.User?.RoleId != 3)
         {
             <header class="top-nav fade-in-down">
@@ -100,9 +40,6 @@
                                 <div class="notification-badge-dot pulse-dot"></div>
                             }
                         </div>
-
-                        @* Эту часть можно удалить, так как админ сюда всё равно не попадёт *@
-                        @* Но если оставить, она не помешает *@
                     </nav>
                     <div class="user-controls">
                         <NotificationBell @ref="notifBell" />
@@ -129,6 +66,7 @@
             </header>
         }
 
+        @* 2. КОНТЕНТ: Если админ — растягиваем на весь экран (full-screen) *@
         <main class="content-area @(ShowNavigation() && Auth.User?.RoleId != 3 ? "with-nav" : "full-screen")">
             @Body
         </main>

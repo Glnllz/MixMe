@@ -9,7 +9,15 @@
 @implements IAsyncDisposable
 
 <BackgroundGlow />
-
+@if (Auth.User?.RoleId == 3)
+{
+    <div style="position: fixed; top: 20px; left: 20px; z-index: 10000;">
+        <button class="btn-danger-modern" @onclick='() => Nav.NavigateTo("/admin")'
+                style="background: #E91E63 !important; border: none !important; color: white !important; padding: 10px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center;">
+            <i class="bi bi-arrow-left-circle me-2"></i> Вернуться в панель управления
+        </button>
+    </div>
+}
 <div class="order-details-layout">
 
     @* --- БЛОК ОШИБОК --- *@
@@ -301,18 +309,40 @@
                     {
                         @foreach (var msg in chatMessages)
                         {
-                            var bubbleClass = msg.User == "Система" ? "system" : (msg.User == Auth.User?.Username ? "me" : "partner");
+                            // 1. Проверяем, системное ли это сообщение
+                            bool isSystem = msg.User == "Система" || msg.User == "🤖";
+
+                            // 2. Логика определения стиля облачка (Bubble)
+                            string bubbleClass;
+
+                            if (isSystem)
+                            {
+                                bubbleClass = "system";
+                            }
+                            else if (Auth.User?.RoleId == 3)
+                            {
+                                // Если смотрит Админ — все сообщения для него "входящие" (слева),
+                                // чтобы он видел диалог со стороны.
+                                bubbleClass = "partner";
+                            }
+                            else
+                            {
+                                // Для обычных пользователей: мои — справа, чужие — слева
+                                bubbleClass = (msg.User == Auth.User?.Username) ? "me" : "partner";
+                            }
 
                             <div class="message-bubble @bubbleClass">
                                 <div class="msg-author">
-                                    @if (msg.User == "Система")
+                                    @if (isSystem)
                                     {
                                         <i class="bi bi-robot me-2"></i>
                                     }
+                                    @* Теперь здесь будет выводиться либо ник заказчика, либо инженера *@
                                     @msg.User
                                 </div>
                                 <div class="msg-content">@msg.Text</div>
-                                @if (msg.User != "Система")
+
+                                @if (!isSystem)
                                 {
                                     <div class="msg-time">@msg.Time.ToString("HH:mm")</div>
                                 }
@@ -1027,7 +1057,7 @@
                         chatMessages = history.Select(m => new ChatMessage
                             {
                                 User = (m.SenderId == Guid.Empty) ? "Система" :
-                                       (m.SenderId == Auth.User?.Id ? Auth.User.Username : (order.PartnerName ?? "Партнер")),
+                                           (m.SenderId == order.CustomerId ? order.CustomerName : order.EngineerName),
                                 Text = m.Content,
                                 Time = m.SentAt
                             }).ToList();
@@ -1362,7 +1392,8 @@
         public decimal TotalAmount { get; set; }
         public Guid CustomerId { get; set; }
         public Guid EngineerId { get; set; }
-
+        public string CustomerName { get; set; } = "";
+        public string EngineerName { get; set; } = "";
         // Новые поля:
         public Guid PartnerId { get; set; }
         public string? PartnerAvatar { get; set; }

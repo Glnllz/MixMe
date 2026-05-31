@@ -141,24 +141,39 @@ public class OrdersController : ControllerBase
         var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
         if (order == null) return NotFound();
 
+        // 1. Получаем профиль текущего пользователя и проверяем, админ ли он
         var currentUser = await _context.Profiles.FindAsync(currentUserId);
-        if (order.CustomerId != currentUserId && order.EngineerId != currentUserId && currentUser?.RoleId != 3)
+        bool isAdmin = currentUser?.RoleId == 3;
+
+        // Проверка доступа: только участники или Админ
+        if (order.CustomerId != currentUserId && order.EngineerId != currentUserId && !isAdmin)
             return StatusCode(403);
 
-        // Определяем, кто наш оппонент
-        var partnerId = (currentUserId == order.CustomerId) ? order.EngineerId : order.CustomerId;
-        var partner = await _context.Profiles.FindAsync(partnerId);
+        // 2. Загружаем профили ОБОИХ участников проекта
+        var customer = await _context.Profiles.FindAsync(order.CustomerId);
+        var engineer = await _context.Profiles.FindAsync(order.EngineerId);
+
+        // 3. Определяем, кто "Партнер" для отображения в шапке
+        // Если смотрит админ - по умолчанию показываем инженера как партнера
+        var partner = (currentUserId == order.CustomerId) ? engineer : customer;
+        if (isAdmin) partner = engineer;
 
         return Ok(new
         {
             Id = order.Id,
             Status = order.Status,
             TotalAmount = order.TotalAmount,
-            CustomerId = order.CustomerId,
-            EngineerId = order.EngineerId,
 
-            // Добавляем эти поля:
-            PartnerId = partnerId,
+            // Данные заказчика
+            CustomerId = order.CustomerId,
+            CustomerName = customer?.Username ?? "Заказчик",
+
+            // Данные инженера
+            EngineerId = order.EngineerId,
+            EngineerName = engineer?.Username ?? "Инженер",
+
+            // Данные для шапки чата (кто партнер для текущего глаза)
+            PartnerId = partner?.Id ?? Guid.Empty,
             PartnerName = partner?.Username ?? "Партнер",
             PartnerAvatar = partner?.AvatarUrl,
 
