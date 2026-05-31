@@ -28,71 +28,72 @@ public class OrdersController : ControllerBase
     [HttpPost("create")]
     public async Task<ActionResult<Guid>> CreateOrder(CreateOrderDto dto)
     {
-        var newOrder = new Order
+        // Открываем транзакцию для безопасности связей
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            Id = Guid.NewGuid(),
-            CustomerId = dto.CustomerId,
-            EngineerId = dto.EngineerId,
-            ServiceId = dto.ServiceId,
-            TotalAmount = dto.TotalAmount,
-            Status = "WaitingForConfirmation",
-            CreatedAt = DateTime.UtcNow
-        };
+            // 1. Создаем и сохраняем ЗАКАЗ
+            var newOrder = new Order
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = dto.CustomerId,
+                EngineerId = dto.EngineerId,
+                ServiceId = dto.ServiceId,
+                TotalAmount = dto.TotalAmount,
+                Status = "WaitingForConfirmation",
+                CreatedAt = DateTime.UtcNow
+            };
 
-        _context.Orders.Add(newOrder);
+            _context.Orders.Add(newOrder);
+            await _context.SaveChangesAsync(); // ЗАКАЗ УЖЕ В БАЗЕ
 
-        // Получаем данные участников для формирования текста
-        var engineer = await _context.Profiles.FindAsync(dto.EngineerId);
-        var customer = await _context.Profiles.FindAsync(dto.CustomerId);
-        var service = await _context.Services.FindAsync(dto.ServiceId);
-        string serviceName = service?.Name ?? "Индивидуальное предложение";
+            // 2. Получаем данные для текста (уже после сохранения заказа)
+            var service = await _context.Services.FindAsync(dto.ServiceId);
+            string serviceName = service?.Name ?? "Индивидуальный проект";
 
-        // --- ОПРЕДЕЛЯЕМ, КОМУ ИДЕТ УВЕДОМЛЕНИЕ ---
-        // В твоей системе сейчас CreateOrder вызывается и заказчиком, и инженером.
-        // Мы можем определить инициатора по контексту или ролям. 
-        // Для универсальности сделаем так: отправим уведомление "Партнеру".
+            var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            Guid initiatorId = Guid.TryParse(currentUserIdStr, out var g) ? g : dto.CustomerId;
 
-        // 1. Системное сообщение в чат
-        string chatContent = $"🤖 Проект '{serviceName}' создан. Ожидается подтверждение условий участниками.";
-        _context.Messages.Add(new Message
+            Guid recipientId = (initiatorId == dto.EngineerId) ? dto.CustomerId : dto.EngineerId;
+            var initiatorProfile = await _context.Profiles.FindAsync(initiatorId);
+            string senderName = initiatorProfile?.Username ?? "Пользователь";
+
+            // 3. Добавляем СООБЩЕНИЕ (теперь OrderId точно существует для базы)
+            _context.Messages.Add(new Message
+            {
+                OrderId = newOrder.Id,
+                SenderId = Guid.Empty, // Это сработает, так как мы сделали SQL-запрос выше!
+                Content = $"🤖 Проект '{serviceName}' создан. Ожидайте подтверждения от партнера.",
+                SentAt = DateTime.UtcNow
+            });
+
+            // 4. Добавляем УВЕДОМЛЕНИЕ
+            string notifText = $"📩 Новый проект от {senderName}: {serviceName}";
+            _context.Notifications.Add(new MixMeShared.Notification
+            {
+                UserId = recipientId,
+                Text = notifText,
+                Link = $"/order/{newOrder.Id}",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+
+            // Подтверждаем транзакцию (всё записано)
+            await transaction.CommitAsync();
+
+            // 5. SignalR
+            await _hubContext.Clients.Group(recipientId.ToString())
+                .SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", notifText);
+
+            return Ok(newOrder.Id);
+        }
+        catch (Exception ex)
         {
-            OrderId = newOrder.Id,
-            SenderId = Guid.Empty,
-            Content = chatContent,
-            SentAt = DateTime.UtcNow
-        });
-
-        // 2. Логика уведомления в колокольчик (Notification)
-        // Нам нужно понять, КТО вызвал этот метод. 
-        // Обычно в токене лежит ID текущего пользователя.
-        var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        Guid initiatorId = Guid.TryParse(currentUserIdStr, out var g) ? g : Guid.Empty;
-
-        // Определяем получателя (тот, кто НЕ инициировал заказ)
-        Guid recipientId = (initiatorId == dto.EngineerId) ? dto.CustomerId : dto.EngineerId;
-        string senderName = (initiatorId == dto.EngineerId) ? (engineer?.Username ?? "Инженер") : (customer?.Username ?? "Заказчик");
-
-        string notifText = (initiatorId == dto.EngineerId)
-            ? $"✉️ Инженер {senderName} предложил вам проект: {serviceName}"
-            : $"📩 Новый запрос от {senderName} на услугу: {serviceName}";
-
-        var notification = new MixMeShared.Notification
-        {
-            UserId = recipientId,
-            Text = notifText,
-            Link = $"/order/{newOrder.Id}",
-            CreatedAt = DateTime.UtcNow
-        };
-        _context.Notifications.Add(notification);
-
-        await _context.SaveChangesAsync();
-
-        // 3. SignalR: Отправляем мгновенный сигнал получателю
-        // Чтобы у него сразу выскочил Toast и загорелся колокольчик
-        await _hubContext.Clients.Group(recipientId.ToString())
-            .SendAsync("ReceiveMessage", newOrder.Id.ToString(), "🤖", notifText);
-
-        return Ok(newOrder.Id);
+            await transaction.RollbackAsync(); // Если упало - откатываем всё
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, $"Ошибка БД: {inner}");
+        }
     }
 
     [HttpGet("user/{userId}")]

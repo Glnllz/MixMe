@@ -105,13 +105,16 @@ public class PostsController : ControllerBase
     public async Task<ActionResult<IEnumerable<object>>> SearchPosts([FromQuery] string? query)
     {
         var postsQuery = _context.Posts
-            .Where(p => _context.Profiles.Any(u => u.Id == p.UserId && u.RoleId == 1)) // Только посты заказчиков
+            .Where(p => p.Status == ModerationStatus.Approved) // Сохраняем модерацию
+            .Where(p => p.Content.Length > 10)                 // Сохраняем защиту от мусора
+            .Where(p => _context.Profiles.Any(u => u.Id == p.UserId && u.RoleId == 1))
             .OrderByDescending(p => p.CreatedAt)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(query))
         {
-            postsQuery = postsQuery.Where(p => p.Content.Contains(query));
+            // Приводим к нижнему регистру для лучшего поиска (зависит от БД)
+            postsQuery = postsQuery.Where(p => p.Content.ToLower().Contains(query.ToLower()));
         }
 
         return await postsQuery.Select(p => new {
@@ -119,6 +122,7 @@ public class PostsController : ControllerBase
             p.UserId,
             p.Content,
             p.CreatedAt,
+            // Оптимальнее тянуть данные профиля один раз
             Username = _context.Profiles.Where(u => u.Id == p.UserId).Select(u => u.Username).FirstOrDefault(),
             AvatarUrl = _context.Profiles.Where(u => u.Id == p.UserId).Select(u => u.AvatarUrl).FirstOrDefault(),
             RoleId = 1

@@ -226,16 +226,23 @@
 
             if (response.IsSuccessStatusCode)
             {
-                // ИСПРАВЛЕНО: Читаем новый формат ответа (Токен + Пользователь)
                 var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
 
                 if (result != null && result.User != null && !string.IsNullOrEmpty(result.Token))
                 {
-                    // ИСПРАВЛЕНО: Передаем в AuthService и токен, и данные профиля
+                    // Сохраняем токен и данные пользователя
                     await Auth.Login(result.Token, result.User);
 
-                    // Перенаправляем в ленту
-                    Nav.NavigateTo("/feed");
+                    // --- ИСПРАВЛЕННАЯ ЛОГИКА ПЕРЕХОДА ---
+                    if (result.User.RoleId == 3) // Если роль Админа (ID = 3)
+                    {
+                        Nav.NavigateTo("/admin");
+                    }
+                    else // Для всех остальных (Обычные пользователи)
+                    {
+                        Nav.NavigateTo("/feed");
+                    }
+                    // ------------------------------------
                 }
                 else
                 {
