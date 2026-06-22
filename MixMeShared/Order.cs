@@ -8,11 +8,11 @@ public class Order
     public int ServiceId { get; set; }
 
     public decimal TotalAmount { get; set; }
-    public string Status { get; set; } = "Created"; // Created, Paid, InProgress, Completed, Disputed, Cancelled
+    public string Status { get; set; } = "Created"; 
 
-    // ЮKassa нюансы
-    public string? PaymentId { get; set; } // ID от ЮKassa
-    public string? PaymentStatus { get; set; } // Статус от ЮKassa (pending, waiting_for_capture, succeeded)
+    // ЮKassa 
+    public string? PaymentId { get; set; } 
+    public string? PaymentStatus { get; set; } 
     public DateTime? CompletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     

@@ -28,11 +28,11 @@ public class OrdersController : ControllerBase
     [HttpPost("create")]
     public async Task<ActionResult<Guid>> CreateOrder(CreateOrderDto dto)
     {
-        // Открываем транзакцию для безопасности связей
+
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            // 1. Создаем и сохраняем ЗАКАЗ
+            
             var newOrder = new Order
             {
                 Id = Guid.NewGuid(),
@@ -45,7 +45,7 @@ public class OrdersController : ControllerBase
             };
 
             _context.Orders.Add(newOrder);
-            await _context.SaveChangesAsync(); // ЗАКАЗ УЖЕ В БАЗЕ
+            await _context.SaveChangesAsync(); 
 
             // 2. Получаем данные для текста (уже после сохранения заказа)
             var service = await _context.Services.FindAsync(dto.ServiceId);

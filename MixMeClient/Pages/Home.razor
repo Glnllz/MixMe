@@ -22,7 +22,7 @@
                 </div>
 
                 <div class="bottom-left-info" style="transform: translate(@(mouseX/80)px, @(mouseY/80)px)">
-                    <h1 class="main-title">MixMe</h1>
+                    <h1 class="main-title">МиксМи</h1>
                     <p class="main-subtitle">Профессиональное сведение и мастеринг в одном приложении.</p>
                     <button class="premium-button" @onclick="() => currentStep = 2">
                         Начать работу <span class="ms-2">→</span>
@@ -527,8 +527,7 @@
     }
     protected override void OnInitialized()
     {
-        // Если сервис авторизации говорит, что пользователь уже вошел (из localStorage),
-        // сразу перенаправляем его в основную часть приложения.
+
         if (Auth.IsLoggedIn)
         {
             Nav.NavigateTo("/feed");

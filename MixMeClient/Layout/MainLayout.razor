@@ -26,7 +26,7 @@
                 <div class="nav-content">
                     <div class="brand" @onclick='() => Nav.NavigateTo("/feed")'>
                         <img src="images/logo.png" alt="logo" />
-                        <span>MixMe</span>
+                        <span>МиксМи</span>
                     </div>
                     <nav class="links">
                         <NavLink href="/feed" ActiveClass="active">Лента</NavLink>
@@ -376,7 +376,6 @@
          hasNewMessageNotification = true;
          if (user == "Система" || user == "🤖") hasNewProjectNotification = true;
 
-         // ДОБАВЬ ЭТУ ПРОВЕРКУ И ВЫЗОВ ТУТ:
          if (notifBell != null)
          {
              await notifBell.Refresh();

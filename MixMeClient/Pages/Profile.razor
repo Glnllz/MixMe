@@ -234,8 +234,8 @@
                                             <div class="time-and-modes">
                                                 <span class="time-display">@(isThisActive ? FormatTime(currentTime) : "0:00") / @(isThisActive ? FormatTime(duration) : "0:00")</span>
                                                 <div class="ab-toggle">
-                                                    <button class="ab-btn @(!isAfterMode && isThisActive ? "active" : "")" @onclick="() => SetMode(item, false)">BEFORE</button>
-                                                    <button class="ab-btn pink @(isAfterMode && isThisActive ? "active" : "")" @onclick="() => SetMode(item, true)">AFTER</button>
+                                                    <button class="ab-btn @(!isAfterMode && isThisActive ? "active" : "")" @onclick="() => SetMode(item, false)">До</button>
+                                                    <button class="ab-btn pink @(isAfterMode && isThisActive ? "active" : "")" @onclick="() => SetMode(item, true)">После</button>
                                                 </div>
                                             </div>
                                         </div>

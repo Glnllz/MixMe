@@ -25,12 +25,10 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     public async Task<ActionResult<object>> Login([FromBody] LoginDto loginDto)
-    {
-        // Ищем пользователя и его роль
+    { 
         var user = await _context.Profiles.Include(p => p.Role)
             .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-        // Проверяем пароль
         if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
             return Unauthorized("Неверный email или пароль");
         if (user.IsBanned)
@@ -38,10 +36,8 @@ public class AuthController : ControllerBase
             return BadRequest("Ваш аккаунт заблокирован администратором.");
         }
 
-        // --- ГЕНЕРАЦИЯ JWT ТОКЕНА ---
         var tokenHandler = new JwtSecurityTokenHandler();
 
-        // Получаем ключ из appsettings.json
         var jwtKey = _config["Jwt:Key"];
         if (string.IsNullOrEmpty(jwtKey)) return StatusCode(500, "JWT Key is not configured");
 
@@ -53,9 +49,9 @@ public class AuthController : ControllerBase
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, user.Role?.Name ?? "Customer") // Добавляем роль в токен
+                new Claim(ClaimTypes.Role, user.Role?.Name ?? "Customer") 
             }),
-            Expires = DateTime.UtcNow.AddDays(7), // Токен живет 7 дней
+            Expires = DateTime.UtcNow.AddDays(7), 
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature),
             Issuer = _config["Jwt:Issuer"],
             Audience = _config["Jwt:Audience"]
@@ -64,7 +60,6 @@ public class AuthController : ControllerBase
         var token = tokenHandler.CreateToken(tokenDescriptor);
         var tokenString = tokenHandler.WriteToken(token);
 
-        // Возвращаем и токен, и данные пользователя (для удобства фронтенда)
         return Ok(new
         {
             Token = tokenString,

@@ -29,12 +29,19 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Настройка связи "Многие-ко-многим" для Инженеров и Жанров
+        
         modelBuilder.Entity<Engineer>()
             .HasMany(e => e.Genres)
             .WithMany();
 
-        // Seed Data (Начальные данные) для Ролей
+        modelBuilder.Entity<MusicService>()
+            .Property(s => s.Price)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Order>()
+            .Property(o => o.TotalAmount)
+            .HasPrecision(18, 2);
+
         modelBuilder.Entity<Role>().HasData(
             new Role { Id = 1, Name = "Customer" },
             new Role { Id = 2, Name = "Engineer" },
@@ -53,12 +60,6 @@ public class ApplicationDbContext : DbContext
         );
 
         // Настройка точности для цен (decimal)
-        modelBuilder.Entity<MusicService>()
-            .Property(s => s.Price)
-            .HasPrecision(18, 2);
-
-        modelBuilder.Entity<Order>()
-            .Property(o => o.TotalAmount)
-            .HasPrecision(18, 2);
+        
     }
 }
